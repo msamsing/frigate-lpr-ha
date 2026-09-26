@@ -1,0 +1,28 @@
+{
+  "title": "Frigate nummerpladeregister",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Forbind Frigate LPR",
+        "description": "MQTT-integrationen skal allerede være konfigureret.",
+        "data": {"topic": "MQTT-emne", "camera": "Frigate-kamera"},
+        "data_description": {
+          "topic": "Emnet med LPR-opdateringer fra Frigate.",
+          "camera": "Kun observationer fra dette eksakte kameranavn registreres."
+        }
+      }
+    },
+    "abort": {"already_configured": "Integrationen er allerede konfigureret."}
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Klassifikationsgrænser",
+        "data": {
+          "frequent_observations": "Mindste antal observationer for Hyppig",
+          "frequent_days": "Mindste antal forskellige dage for Hyppig"
+        }
+      }
+    }
+  }
+}

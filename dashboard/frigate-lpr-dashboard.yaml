@@ -1,0 +1,70 @@
+title: Nummerplader
+views:
+  - title: Overblik
+    path: lpr
+    icon: mdi:car-search
+    cards:
+      - type: horizontal-stack
+        cards:
+          - type: entity
+            entity: sensor.frigate_lpr_rlgade_unikke_plader_i_dag
+            name: Unikke i dag
+            icon: mdi:car-multiple
+          - type: entity
+            entity: sensor.frigate_lpr_rlgade_observationer_i_dag
+            name: Observationer i dag
+            icon: mdi:counter
+          - type: entity
+            entity: sensor.frigate_lpr_rlgade_unikke_plader_i_alt
+            name: Unikke i alt
+            icon: mdi:database
+      - type: markdown
+        title: Seneste registrerede plader
+        content: >-
+          {% set items = state_attr('sensor.frigate_lpr_rlgade_seneste_nummerplade', 'items') or [] %}
+          | Plade | Tid | Score |
+          |---|---|---:|
+          {% for item in items[:10] %}
+          | **{{ item.plate }}** | {{ as_datetime(item.timestamp).strftime('%d-%m %H:%M') }} | {{ ((item.score or 0) * 100) | round(0) }}% |
+          {% else %}
+          | Ingen observationer | – | – |
+          {% endfor %}
+      - type: markdown
+        title: Hyppigste plader
+        content: >-
+          {% set items = state_attr('sensor.frigate_lpr_rlgade_hyppigste_nummerplader', 'items') or [] %}
+          | Plade | Navn | Observationer | Dage |
+          |---|---|---:|---:|
+          {% for item in items %}
+          | **{{ item.plate }}** | {{ item.name or '–' }} | {{ item.count }} | {{ item.days }} |
+          {% endfor %}
+      - type: markdown
+        title: Nye / engangsbesøgende
+        content: >-
+          {% set items = state_attr('sensor.frigate_lpr_rlgade_nye_og_engangsbesogende', 'items') or [] %}
+          {% for item in items %}
+          **{{ item.plate }}** · {{ as_datetime(item.last_seen).strftime('%d-%m %H:%M') }}  
+          {% else %}Ingen{% endfor %}
+      - type: markdown
+        title: Kendte plader
+        content: >-
+          {% set items = state_attr('sensor.frigate_lpr_rlgade_kendte_nummerplader', 'items') or [] %}
+          {% for item in items %}
+          **{{ item.plate }}** — {{ item.name }} ({{ 'Egen' if item.category == 'own' else 'Kendt lokal' }})  
+          {% endfor %}
+      # Denne korttype viser automatisk alle pladesensorer. Klik på en række
+      # åbner Home Assistants detaljevisning med observationer og intervaller.
+      # Kræver frontend-kortet auto-entities fra HACS.
+      - type: custom:auto-entities
+        card:
+          type: entities
+          title: Alle nummerplader – klik for detaljer
+        filter:
+          include:
+            - entity_id: sensor.frigate_lpr_rlgade_*
+              attributes:
+                plate: "*"
+        sort:
+          method: attribute
+          attribute: last_seen
+          reverse: true

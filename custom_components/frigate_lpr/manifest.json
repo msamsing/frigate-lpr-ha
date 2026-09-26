@@ -1,0 +1,11 @@
+{
+  "domain": "frigate_lpr",
+  "name": "Frigate LPR Registry",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": ["mqtt"],
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "single_config_entry": true,
+  "version": "1.0.0"
+}

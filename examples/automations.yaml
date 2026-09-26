@@ -1,0 +1,18 @@
+- alias: LPR – giv besked om ny ukendt plade
+  mode: queued
+  trigger:
+    - platform: event
+      event_type: frigate_lpr_new_plate
+  condition: []
+  action:
+    - service: persistent_notification.create
+      data:
+        title: Ny nummerplade
+        message: "{{ trigger.event.data.plate }} blev set ved {{ trigger.event.data.camera }}."
+
+# Navngiv en plade fra Udviklerværktøjer → Handlinger:
+# action: frigate_lpr.set_plate
+# data:
+#   plate: AB12345
+#   name: Naboens bil
+#   category: known
