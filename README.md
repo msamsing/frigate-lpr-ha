@@ -59,8 +59,10 @@ Frigate sender LPR som `type: lpr` med felterne `id`, `plate`, `camera`, `score`
 
 ## Dashboard
 
-Dashboardet bruger kun indbyggede Lovelace-kort og kræver derfor ingen JavaScript-
-resources eller andre custom cards. Det grafiske overblik opdeler plader i **Egen**,
+Dashboardet oprettes automatisk som **Nummerplader** i Home Assistants sidepanel,
+når integrationen sættes op. Brugeren skal ikke tilføje kort eller kopiere YAML.
+Det bruger kun indbyggede Lovelace-kort og kræver derfor ingen JavaScript-resources
+eller andre custom cards. Det grafiske overblik opdeler plader i **Egen**,
 **Kendt lokal**, **Hyppig**, **Sjælden** og **Engangsbesøgende** med farvekoder,
 optællinger og frekvensdata.
 
@@ -68,13 +70,10 @@ En native dropdown-entitet, `select.frigate_lpr_selected_plate`, vælger den pla
 som detaljekortet viser. Dermed kan historik og statistik vises dynamisk uden et
 custom frontend-element.
 
-Sådan installeres opsætningen:
-
-1. Opret et nyt dashboard i Home Assistant og åbn **Rediger → Rå konfigurationseditor**.
-2. Indsæt indholdet fra
-   [`dashboard/frigate-lpr-dashboard.yaml`](dashboard/frigate-lpr-dashboard.yaml).
-3. Gem dashboardet. Hvis Home Assistant har tilføjet suffikser til entity-id'er, ret
-   dem i YAML-filen via entitetsoversigten.
+Dashboardet er integrationsstyret og opdateres ved genstart, når en ny version ændrer
+layoutet. Det ændrer eller overskriver aldrig brugerens øvrige dashboards. En læsbar
+kopi af opsætningen findes i
+[`dashboard/frigate-lpr-dashboard.yaml`](dashboard/frigate-lpr-dashboard.yaml).
 
 ## Tilføj eller opdater en kendt plade
 

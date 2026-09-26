@@ -2,6 +2,7 @@
 
 DOMAIN = "frigate_lpr"
 PLATFORMS = ["sensor", "select"]
+DASHBOARD_URL_PATH = "frigate-lpr"
 
 CONF_TOPIC = "topic"
 CONF_CAMERA = "camera"

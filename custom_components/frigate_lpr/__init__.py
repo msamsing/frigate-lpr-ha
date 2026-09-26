@@ -21,6 +21,7 @@ from .const import (
     SERVICE_REMOVE_PLATE_METADATA,
     SERVICE_SET_PLATE,
 )
+from .dashboard import async_remove_dashboard, async_setup_dashboard
 from .manager import LPRManager
 
 FrigateLPRConfigEntry = ConfigEntry[LPRManager]
@@ -36,6 +37,7 @@ REMOVE_SCHEMA = vol.Schema({vol.Required("plate"): cv.string})
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -> bool:
+    await async_setup_dashboard(hass)
     manager = LPRManager(
         hass,
         entry.entry_id,
@@ -67,6 +69,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) 
         hass.services.async_remove(DOMAIN, SERVICE_SET_PLATE)
         hass.services.async_remove(DOMAIN, SERVICE_REMOVE_PLATE_METADATA)
     return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -> None:
+    """Remove the integration-owned dashboard when the entry is deleted."""
+    await async_remove_dashboard(hass)
 
 
 async def _async_reload_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -> None:
