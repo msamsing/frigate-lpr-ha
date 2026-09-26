@@ -16,7 +16,6 @@ from .const import (
     CONF_TOPIC,
     DEFAULT_FREQUENT_DAYS,
     DEFAULT_FREQUENT_OBSERVATIONS,
-    DEFAULT_KNOWN_PLATES,
     DOMAIN,
     PLATFORMS,
     SERVICE_REMOVE_PLATE_METADATA,
@@ -47,11 +46,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -
     )
     await manager.async_setup()
     entry.runtime_data = manager
-
-    for plate, metadata in DEFAULT_KNOWN_PLATES.items():
-        if plate not in manager.registry.plates:
-            manager.registry.set_metadata(plate, metadata["name"], metadata["category"])
-    await manager.store.async_save(manager.registry.data)
 
     async def set_plate(call: ServiceCall) -> None:
         await manager.async_set_metadata(call.data["plate"], call.data[CONF_NAME], call.data["category"])

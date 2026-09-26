@@ -18,8 +18,3 @@ SIGNAL_NEW_PLATE = f"{DOMAIN}_new_plate"
 
 SERVICE_SET_PLATE = "set_plate"
 SERVICE_REMOVE_PLATE_METADATA = "remove_plate_metadata"
-
-DEFAULT_KNOWN_PLATES = {
-    "EJ85963": {"name": "Egen bil", "category": "own"},
-    "EF41178": {"name": "Egen bil", "category": "own"},
-}

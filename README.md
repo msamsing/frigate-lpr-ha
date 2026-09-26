@@ -15,7 +15,7 @@ observationshistorikken.
 - Dagstællere, seneste observationer, hyppigste, kendte og engangsbesøgende.
 - Dynamisk sensor for hver plade; klik på sensoren viser statistik og de 50 seneste observationer/intervaller.
 - Navngivning og kategori via handlingen `frigate_lpr.set_plate`.
-- Forudindlæst: `EJ85963` og `EF41178` som `Egen bil` / `own`.
+- Egne og andre kendte plader kan oprettes efter installationen.
 
 ## Klassifikation
 

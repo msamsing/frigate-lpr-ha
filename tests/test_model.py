@@ -15,7 +15,7 @@ normalize_plate = model.normalize_plate
 
 class LPRRegistryTests(unittest.TestCase):
     def test_normalize_plate(self):
-        self.assertEqual(normalize_plate(" ej 85-963 "), "EJ85963")
+        self.assertEqual(normalize_plate(" ab 12-345 "), "AB12345")
 
     def test_observation_stats_and_deduplication(self):
         registry = LPRRegistry()
@@ -32,8 +32,8 @@ class LPRRegistryTests(unittest.TestCase):
     def test_transparent_classification(self):
         registry = LPRRegistry(frequent_observations=3, frequent_days=2)
         start = datetime(2026, 9, 1, tzinfo=timezone.utc)
-        registry.set_metadata("EJ85963", "Egen bil", "own")
-        self.assertEqual(registry.plate_view("EJ85963")["classification"], "Egen")
+        registry.set_metadata("AB12345", "Min bil", "own")
+        self.assertEqual(registry.plate_view("AB12345")["classification"], "Egen")
         registry.set_metadata("XX12345", "Nabo", "known")
         self.assertEqual(registry.plate_view("XX12345")["classification"], "Kendt lokal")
         registry.observe("ONE1", start, "1", camera="rlgade")
