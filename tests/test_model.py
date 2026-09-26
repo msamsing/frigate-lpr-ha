@@ -41,6 +41,11 @@ class LPRRegistryTests(unittest.TestCase):
         for index, hours in enumerate((0, 1, 25)):
             registry.observe("FREQ1", start + timedelta(hours=hours), str(index), camera="test_camera")
         self.assertEqual(registry.plate_view("FREQ1")["classification"], "Hyppig")
+        summary = registry.summary("2026-09-02")
+        self.assertEqual(summary["own"][0]["plate"], "AB12345")
+        self.assertEqual(summary["known_local"][0]["plate"], "XX12345")
+        self.assertEqual(summary["frequent_class"][0]["plate"], "FREQ1")
+        self.assertEqual(summary["one_time"][0]["plate"], "ONE1")
 
     def test_roundtrip_persistence_and_daily_summary(self):
         registry = LPRRegistry()

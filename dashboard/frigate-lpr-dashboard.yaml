@@ -1,8 +1,147 @@
-title: Nummerplader
+title: Nummerpladeregister
 views:
   - title: Overblik
     path: lpr
     icon: mdi:car-search
     cards:
-      - type: custom:frigate-lpr-card
-        title: Nummerpladeregister
+      - type: markdown
+        content: |
+          # 🚘 Nummerpladeregister
+          Live-overblik fra Frigate LPR
+
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: tile
+            entity: sensor.frigate_lpr_unique_today
+            name: Unikke i dag
+            icon: mdi:car-multiple
+            color: blue
+          - type: tile
+            entity: sensor.frigate_lpr_observations_today
+            name: Observationer i dag
+            icon: mdi:counter
+            color: cyan
+          - type: tile
+            entity: sensor.frigate_lpr_total_unique
+            name: Unikke i alt
+            icon: mdi:database
+            color: indigo
+
+      - type: markdown
+        title: Seneste observationer
+        content: >-
+          {% set items = state_attr('sensor.frigate_lpr_recent', 'items') or [] %}
+          | Nummerplade | Tidspunkt | Sikkerhed |
+          |:--|:--|--:|
+          {% for item in items[:10] %}
+          | **{{ item.plate }}** | {{ as_datetime(item.timestamp).strftime('%d/%m %H:%M') }} | {{ ((item.score or 0) * 100) | round(0) }} % |
+          {% else %}
+          | Ingen observationer endnu | – | – |
+          {% endfor %}
+
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: markdown
+            title: 🏠 Egne
+            content: >-
+              {% set items = state_attr('sensor.frigate_lpr_own', 'items') or [] %}
+              **{{ items | count }} plader**
+
+              {% for item in items %}
+              🟢 **{{ item.plate }}** — {{ item.name or 'Navngivet som egen' }}<br>
+              <small>{{ item.count }} observationer · {{ item.days }} dage</small>
+
+              {% else %}_Ingen plader i kategorien_{% endfor %}
+
+          - type: markdown
+            title: 📍 Kendt lokal
+            content: >-
+              {% set items = state_attr('sensor.frigate_lpr_known_local', 'items') or [] %}
+              **{{ items | count }} plader**
+
+              {% for item in items %}
+              🔵 **{{ item.plate }}** — {{ item.name or 'Kendt lokal' }}<br>
+              <small>{{ item.count }} observationer · {{ item.days }} dage</small>
+
+              {% else %}_Ingen plader i kategorien_{% endfor %}
+
+          - type: markdown
+            title: 🔁 Hyppige
+            content: >-
+              {% set items = state_attr('sensor.frigate_lpr_frequent_class', 'items') or [] %}
+              **{{ items | count }} plader**
+
+              {% for item in items %}
+              🟠 **{{ item.plate }}**<br>
+              <small>{{ item.count }} observationer · {{ item.days }} dage</small>
+
+              {% else %}_Ingen plader i kategorien_{% endfor %}
+
+          - type: markdown
+            title: ◽ Sjældne
+            content: >-
+              {% set items = state_attr('sensor.frigate_lpr_rare', 'items') or [] %}
+              **{{ items | count }} plader**
+
+              {% for item in items[:12] %}
+              ⚪ **{{ item.plate }}** — {{ item.count }} observationer<br>
+
+              {% else %}_Ingen plader i kategorien_{% endfor %}
+
+          - type: markdown
+            title: ✨ Engangsbesøgende
+            content: >-
+              {% set items = state_attr('sensor.frigate_lpr_one_time', 'items') or [] %}
+              **{{ items | count }} plader**
+
+              {% for item in items[:12] %}
+              🟣 **{{ item.plate }}** — {{ as_datetime(item.last_seen).strftime('%d/%m %H:%M') }}<br>
+
+              {% else %}_Ingen plader i kategorien_{% endfor %}
+
+          - type: markdown
+            title: 📊 Klassifikationsfordeling
+            content: >-
+              {% set classes = state_attr('sensor.frigate_lpr_recent', 'classifications') or {} %}
+              🟢 Egen: **{{ classes.get('Egen', 0) }}**<br>
+              🔵 Kendt lokal: **{{ classes.get('Kendt lokal', 0) }}**<br>
+              🟠 Hyppig: **{{ classes.get('Hyppig', 0) }}**<br>
+              ⚪ Sjælden: **{{ classes.get('Sjælden', 0) }}**<br>
+              🟣 Engangsbesøgende: **{{ classes.get('Engangsbesøgende', 0) }}**
+
+      - type: entities
+        title: Nummerpladedetaljer
+        show_header_toggle: false
+        entities:
+          - entity: select.frigate_lpr_selected_plate
+            name: Vælg nummerplade
+
+      - type: markdown
+        title: Valgt nummerplade
+        content: >-
+          {% set entity = 'select.frigate_lpr_selected_plate' %}
+          {% set plate = state_attr(entity, 'plate') %}
+          {% if plate %}
+          # {{ plate }}
+          **{{ state_attr(entity, 'name') or state_attr(entity, 'classification') }}**
+
+          | Felt | Værdi |
+          |:--|:--|
+          | Klassifikation | **{{ state_attr(entity, 'classification') }}** |
+          | Første observation | {{ as_datetime(state_attr(entity, 'first_seen')).strftime('%d/%m/%Y %H:%M') }} |
+          | Seneste observation | {{ as_datetime(state_attr(entity, 'last_seen')).strftime('%d/%m/%Y %H:%M') }} |
+          | Observationer | {{ state_attr(entity, 'observations_count') }} |
+          | Forskellige dage | {{ state_attr(entity, 'different_days') }} |
+          | Gennemsnitligt interval | {{ state_attr(entity, 'average_interval_hours') or '–' }} timer |
+
+          ### Seneste historik
+          {% for item in (state_attr(entity, 'observations') or []) | reverse %}
+          - **{{ as_datetime(item.timestamp).strftime('%d/%m/%Y %H:%M') }}**{% if item.camera %} · {{ item.camera }}{% endif %}{% if item.score is not none %} · {{ (item.score * 100) | round(0) }} %{% endif %}
+          {% endfor %}
+          {% else %}
+          _Der er endnu ingen observerede nummerplader._
+          {% endif %}

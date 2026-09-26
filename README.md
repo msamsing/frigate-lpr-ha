@@ -16,7 +16,7 @@ observationshistorikken.
 - Dynamisk sensor for hver plade; klik på sensoren viser statistik og de 50 seneste observationer/intervaller.
 - Navngivning og kategori gennem integrationens UI eller handlingen `frigate_lpr.set_plate`.
 - Egne og andre kendte plader kan oprettes efter installationen.
-- Medfølgende Lovelace-kort med overblik og klikbar pladehistorik uden ekstra frontend-afhængigheder.
+- Medfølgende dashboardopsætning baseret udelukkende på Home Assistants indbyggede Lovelace-kort.
 
 ## Klassifikation
 
@@ -59,31 +59,22 @@ Frigate sender LPR som `type: lpr` med felterne `id`, `plate`, `camera`, `score`
 
 ## Dashboard
 
-Lovelace-kortet følger med integrationen og registreres automatisk som en frontend-resource.
-Efter genstart kan det tilføjes fra dashboardets kortvælger som **Frigate LPR Registry**.
-Det kræver ingen andre custom cards.
+Dashboardet bruger kun indbyggede Lovelace-kort og kræver derfor ingen JavaScript-
+resources eller andre custom cards. Det grafiske overblik opdeler plader i **Egen**,
+**Kendt lokal**, **Hyppig**, **Sjælden** og **Engangsbesøgende** med farvekoder,
+optællinger og frekvensdata.
 
-Minimal YAML-konfiguration:
+En native dropdown-entitet, `select.frigate_lpr_selected_plate`, vælger den plade,
+som detaljekortet viser. Dermed kan historik og statistik vises dynamisk uden et
+custom frontend-element.
 
-```yaml
-type: custom:frigate-lpr-card
-title: Nummerpladeregister
-```
+Sådan installeres opsætningen:
 
-Et komplet dashboardeksempel findes i
-[`dashboard/frigate-lpr-dashboard.yaml`](dashboard/frigate-lpr-dashboard.yaml).
-Kortet finder integrationens entiteter via attributter og er derfor uafhængigt af
-kamera- og entity-navne. Klik på en plade åbner dens statistik, klassifikation,
-intervaller og seneste observationshistorik.
-
-Hvis Home Assistant bruger Lovelace resources i YAML-tilstand, kan integrationen ikke
-ændre ressourcefilen automatisk. Tilføj da dette under dashboardets `resources` og
-genstart:
-
-```yaml
-- url: /frigate_lpr_static/frigate-lpr-card.js
-  type: module
-```
+1. Opret et nyt dashboard i Home Assistant og åbn **Rediger → Rå konfigurationseditor**.
+2. Indsæt indholdet fra
+   [`dashboard/frigate-lpr-dashboard.yaml`](dashboard/frigate-lpr-dashboard.yaml).
+3. Gem dashboardet. Hvis Home Assistant har tilføjet suffikser til entity-id'er, ret
+   dem i YAML-filen via entitetsoversigten.
 
 ## Tilføj eller opdater en kendt plade
 

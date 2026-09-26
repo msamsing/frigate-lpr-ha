@@ -157,6 +157,21 @@ class LPRRegistry:
             for plate, record in self.plates.items()
             if record["count"] == 1
         ]
+        classified = {name: [] for name in ("Egen", "Kendt lokal", "Hyppig", "Sjælden", "Engangsbesøgende")}
+        for plate, record in self.plates.items():
+            classification = self.classification(record)
+            classified[classification].append(
+                {
+                    "plate": plate,
+                    "name": record["name"] or record["frigate_name"],
+                    "count": record["count"],
+                    "days": len(record["days"]),
+                    "last_seen": record["last_seen"],
+                    "classification": classification,
+                }
+            )
+        for items in classified.values():
+            items.sort(key=lambda item: (-item["count"], item["plate"]))
         return {
             "unique_today": len(plates_today),
             "observations_today": all_today_count,
@@ -164,6 +179,10 @@ class LPRRegistry:
             "frequent": frequent,
             "known": known,
             "one_time": sorted(one_time, key=lambda item: item["last_seen"] or "", reverse=True)[:20],
+            "own": classified["Egen"],
+            "known_local": classified["Kendt lokal"],
+            "frequent_class": classified["Hyppig"],
+            "rare": classified["Sjælden"],
             "total_unique": len(self.plates),
             "classifications": dict(Counter(self.classification(record) for record in self.plates.values())),
         }

@@ -25,6 +25,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         LPRListSensor(manager, entry.entry_id, "frequent", "Hyppigste nummerplader"),
         LPRListSensor(manager, entry.entry_id, "one_time", "Nye og engangsbesøgende"),
         LPRListSensor(manager, entry.entry_id, "known", "Kendte nummerplader"),
+        LPRListSensor(manager, entry.entry_id, "own", "Egne nummerplader"),
+        LPRListSensor(manager, entry.entry_id, "known_local", "Kendte lokale nummerplader"),
+        LPRListSensor(manager, entry.entry_id, "frequent_class", "Hyppige nummerplader"),
+        LPRListSensor(manager, entry.entry_id, "rare", "Sjældne nummerplader"),
     ])
     known_entities = set(manager.registry.plates)
     async_add_entities([LPRPlateSensor(manager, entry.entry_id, plate) for plate in known_entities])

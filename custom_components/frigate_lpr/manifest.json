@@ -3,11 +3,11 @@
   "name": "Frigate LPR Registry",
   "codeowners": ["@msamsing"],
   "config_flow": true,
-  "dependencies": ["http", "lovelace", "mqtt"],
+  "dependencies": ["mqtt"],
   "documentation": "https://github.com/msamsing/frigate-lpr-ha#readme",
   "integration_type": "service",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/msamsing/frigate-lpr-ha/issues",
   "single_config_entry": true,
-  "version": "1.2.1"
+  "version": "1.3.0"
 }

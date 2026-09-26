@@ -1,10 +1,7 @@
 """Constants for Frigate LPR Registry."""
 
 DOMAIN = "frigate_lpr"
-PLATFORMS = ["sensor"]
-
-CARD_URL = "/frigate_lpr_static/frigate-lpr-card.js"
-STATIC_URL = "/frigate_lpr_static"
+PLATFORMS = ["sensor", "select"]
 
 CONF_TOPIC = "topic"
 CONF_CAMERA = "camera"
