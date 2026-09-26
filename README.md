@@ -69,7 +69,8 @@ Sådan bruges kortet:
 3. Konfigurer titel, startvisning, antal viste plader, nøgletal og detaljevisning i
    den grafiske editor, og vælg **Gem**.
 
-Der skal ikke kopieres YAML eller oprettes en Lovelace-resource manuelt. Kortet finder
+Der skal ikke kopieres YAML eller oprettes en Lovelace-resource manuelt. Integrationen
+registrerer selv kortets modul i Home Assistants Lovelace-resource-lager. Kortet finder
 automatisk integrationens entiteter og opdeler plader grafisk i **Egen**,
 **Kendt lokal**, **Hyppig**, **Sjælden** og **Engangsbesøgende**. Klik på en plade
 for at vise dens historik og observationsfrekvens.

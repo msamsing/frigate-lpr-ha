@@ -9,12 +9,15 @@ import voluptuous as vol
 
 from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.lovelace.const import LOVELACE_DATA, MODE_STORAGE
+from homeassistant.components.lovelace.resources import ResourceStorageCollection
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
+    CARD_RESOURCE_PATH,
     CARD_URL,
     CONF_CAMERA,
     CONF_FREQUENT_DAYS,
@@ -88,7 +91,7 @@ async def _async_reload_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry)
 
 
 async def _async_register_card(hass: HomeAssistant) -> None:
-    """Serve and load the bundled Lovelace card without manual resources."""
+    """Serve and register the bundled card as a Lovelace module."""
     card_path = Path(__file__).parent / "frontend" / "frigate-lpr-card.js"
     if not card_path.is_file():
         _LOGGER.warning("Bundled Lovelace card was not found at %s", card_path)
@@ -99,4 +102,32 @@ async def _async_register_card(hass: HomeAssistant) -> None:
             [StaticPathConfig(STATIC_URL_PATH, str(card_path.parent), False)]
         )
         hass.data[_FRONTEND_REGISTERED] = True
-    frontend.add_extra_js_url(hass, CARD_URL)
+
+    lovelace = hass.data.get(LOVELACE_DATA)
+    if lovelace is None or lovelace.resource_mode != MODE_STORAGE:
+        # YAML resource mode has no writable resource collection. Loading the
+        # module globally keeps the card automatic for those installations.
+        frontend.add_extra_js_url(hass, CARD_URL)
+        return
+
+    resources = lovelace.resources
+    if not isinstance(resources, ResourceStorageCollection):
+        frontend.add_extra_js_url(hass, CARD_URL)
+        return
+
+    # Force the resource store to load before inspecting or changing it. This
+    # avoids replacing an as-yet-unloaded list of the user's existing resources.
+    await resources.async_get_info()
+    existing = next(
+        (
+            item
+            for item in resources.async_items()
+            if item.get("url", "").startswith(CARD_RESOURCE_PATH)
+        ),
+        None,
+    )
+    resource_data = {"res_type": "module", "url": CARD_URL}
+    if existing is None:
+        await resources.async_create_item(resource_data)
+    elif existing.get("url") != CARD_URL or existing.get("res_type") != "module":
+        await resources.async_update_item(existing["id"], resource_data)
