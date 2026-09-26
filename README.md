@@ -16,7 +16,7 @@ observationshistorikken.
 - Dynamisk sensor for hver plade; klik på sensoren viser statistik og de 50 seneste observationer/intervaller.
 - Navngivning og kategori gennem integrationens UI eller handlingen `frigate_lpr.set_plate`.
 - Egne og andre kendte plader kan oprettes efter installationen.
-- Medfølgende dashboardopsætning baseret udelukkende på Home Assistants indbyggede Lovelace-kort.
+- Medfølgende Lovelace-kort, som kan vælges og konfigureres direkte i dashboard-editoren.
 
 ## Klassifikation
 
@@ -59,21 +59,23 @@ Frigate sender LPR som `type: lpr` med felterne `id`, `plate`, `camera`, `score`
 
 ## Dashboard
 
-Dashboardet oprettes automatisk som **Nummerplader** i Home Assistants sidepanel,
-når integrationen sættes op. Brugeren skal ikke tilføje kort eller kopiere YAML.
-Det bruger kun indbyggede Lovelace-kort og kræver derfor ingen JavaScript-resources
-eller andre custom cards. Det grafiske overblik opdeler plader i **Egen**,
-**Kendt lokal**, **Hyppig**, **Sjælden** og **Engangsbesøgende** med farvekoder,
-optællinger og frekvensdata.
+Integrationen indlæser automatisk det medfølgende Lovelace-kort. Den opretter ikke
+et dashboard og tilføjer ikke noget til sidepanelet.
 
-En native dropdown-entitet, `select.frigate_lpr_selected_plate`, vælger den plade,
-som detaljekortet viser. Dermed kan historik og statistik vises dynamisk uden et
-custom frontend-element.
+Sådan bruges kortet:
 
-Dashboardet er integrationsstyret og opdateres ved genstart, når en ny version ændrer
-layoutet. Det ændrer eller overskriver aldrig brugerens øvrige dashboards. En læsbar
-kopi af opsætningen findes i
-[`dashboard/frigate-lpr-dashboard.yaml`](dashboard/frigate-lpr-dashboard.yaml).
+1. Åbn det dashboard, hvor overblikket skal vises, og vælg **Rediger dashboard**.
+2. Vælg **Tilføj kort** og søg efter **Frigate LPR Registry**.
+3. Konfigurer titel, startvisning, antal viste plader, nøgletal og detaljevisning i
+   den grafiske editor, og vælg **Gem**.
+
+Der skal ikke kopieres YAML eller oprettes en Lovelace-resource manuelt. Kortet finder
+automatisk integrationens entiteter og opdeler plader grafisk i **Egen**,
+**Kendt lokal**, **Hyppig**, **Sjælden** og **Engangsbesøgende**. Klik på en plade
+for at vise dens historik og observationsfrekvens.
+
+Ved opgradering fra 1.3.1 fjernes det selvstændige **Nummerplader**-dashboard, som
+den version oprettede, automatisk.
 
 ## Tilføj eller opdater en kendt plade
 

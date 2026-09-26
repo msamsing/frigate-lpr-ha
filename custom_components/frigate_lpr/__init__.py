@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+import logging
+from pathlib import Path
+
 import voluptuous as vol
 
+from homeassistant.components import frontend
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
+    CARD_URL,
     CONF_CAMERA,
     CONF_FREQUENT_DAYS,
     CONF_FREQUENT_OBSERVATIONS,
@@ -20,9 +26,13 @@ from .const import (
     PLATFORMS,
     SERVICE_REMOVE_PLATE_METADATA,
     SERVICE_SET_PLATE,
+    STATIC_URL_PATH,
 )
-from .dashboard import async_remove_dashboard, async_setup_dashboard
 from .manager import LPRManager
+from .migration import async_remove_legacy_dashboard
+
+_LOGGER = logging.getLogger(__name__)
+_FRONTEND_REGISTERED = f"{DOMAIN}_frontend_registered"
 
 FrigateLPRConfigEntry = ConfigEntry[LPRManager]
 
@@ -37,7 +47,8 @@ REMOVE_SCHEMA = vol.Schema({vol.Required("plate"): cv.string})
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -> bool:
-    await async_setup_dashboard(hass)
+    await async_remove_legacy_dashboard(hass)
+    await _async_register_card(hass)
     manager = LPRManager(
         hass,
         entry.entry_id,
@@ -68,13 +79,24 @@ async def async_unload_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) 
         await entry.runtime_data.async_unload()
         hass.services.async_remove(DOMAIN, SERVICE_SET_PLATE)
         hass.services.async_remove(DOMAIN, SERVICE_REMOVE_PLATE_METADATA)
+        frontend.remove_extra_js_url(hass, CARD_URL)
     return unloaded
-
-
-async def async_remove_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -> None:
-    """Remove the integration-owned dashboard when the entry is deleted."""
-    await async_remove_dashboard(hass)
 
 
 async def _async_reload_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def _async_register_card(hass: HomeAssistant) -> None:
+    """Serve and load the bundled Lovelace card without manual resources."""
+    card_path = Path(__file__).parent / "frontend" / "frigate-lpr-card.js"
+    if not card_path.is_file():
+        _LOGGER.warning("Bundled Lovelace card was not found at %s", card_path)
+        return
+
+    if not hass.data.get(_FRONTEND_REGISTERED):
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(STATIC_URL_PATH, str(card_path.parent), False)]
+        )
+        hass.data[_FRONTEND_REGISTERED] = True
+    frontend.add_extra_js_url(hass, CARD_URL)

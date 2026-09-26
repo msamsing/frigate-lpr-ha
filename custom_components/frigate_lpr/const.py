@@ -2,7 +2,8 @@
 
 DOMAIN = "frigate_lpr"
 PLATFORMS = ["sensor", "select"]
-DASHBOARD_URL_PATH = "frigate-lpr"
+CARD_URL = "/frigate_lpr/frigate-lpr-card.js?v=1.4.0"
+STATIC_URL_PATH = "/frigate_lpr"
 
 CONF_TOPIC = "topic"
 CONF_CAMERA = "camera"
