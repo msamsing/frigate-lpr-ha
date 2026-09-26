@@ -3,6 +3,9 @@
 DOMAIN = "frigate_lpr"
 PLATFORMS = ["sensor"]
 
+CARD_URL = "/frigate_lpr_static/frigate-lpr-card.js"
+STATIC_URL = "/frigate_lpr_static"
+
 CONF_TOPIC = "topic"
 CONF_CAMERA = "camera"
 CONF_FREQUENT_OBSERVATIONS = "frequent_observations"

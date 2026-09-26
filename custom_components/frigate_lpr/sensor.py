@@ -74,6 +74,10 @@ class LPRSummarySensor(LPRBaseSensor):
     def native_value(self) -> int:
         return self.manager.registry.summary(dt_util.now().date().isoformat())[self.key]
 
+    @property
+    def extra_state_attributes(self) -> dict[str, str]:
+        return {"frigate_lpr_view": self.key}
+
 
 class LPRListSensor(LPRBaseSensor):
     def __init__(self, manager: LPRManager, entry_id: str, key: str, name: str) -> None:
@@ -93,7 +97,11 @@ class LPRListSensor(LPRBaseSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         summary = self.manager.registry.summary(dt_util.now().date().isoformat())
-        return {"items": summary[self.key], "classifications": summary["classifications"]}
+        return {
+            "frigate_lpr_view": self.key,
+            "items": summary[self.key],
+            "classifications": summary["classifications"],
+        }
 
 
 class LPRPlateSensor(LPRBaseSensor):
@@ -112,6 +120,7 @@ class LPRPlateSensor(LPRBaseSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         view = self.manager.registry.plate_view(self.plate)
         return {
+            "frigate_lpr_view": "plate",
             "plate": self.plate,
             "name": view["name"] or view["frigate_name"],
             "user_category": view["category"],
