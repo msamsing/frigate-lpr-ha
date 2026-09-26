@@ -2,7 +2,7 @@
 
 En lokal Home Assistant-integration, der lytter på Frigates MQTT-emne
 `frigate/tracked_object_update`, registrerer nummerplader persistent og viser dem som
-sensorer i Home Assistant. Standardkameraet er `rlgade`.
+sensorer i Home Assistant. MQTT-emne og et valgfrit kamerafilter vælges i opsætningsdialogen.
 
 Data gemmes i Home Assistants egen `.storage` via `Store`; der kræves ingen ekstern
 database. En genstart af Home Assistant bevarer plader, metadata og hele
@@ -14,7 +14,7 @@ observationshistorikken.
 - Første/seneste observation, samlet antal, antal forskellige dage, alle observationer og intervaller i sekunder.
 - Dagstællere, seneste observationer, hyppigste, kendte og engangsbesøgende.
 - Dynamisk sensor for hver plade; klik på sensoren viser statistik og de 50 seneste observationer/intervaller.
-- Navngivning og kategori via handlingen `frigate_lpr.set_plate`.
+- Navngivning og kategori gennem integrationens UI eller handlingen `frigate_lpr.set_plate`.
 - Egne og andre kendte plader kan oprettes efter installationen.
 
 ## Klassifikation
@@ -34,21 +34,34 @@ klassificerer de samme observerede data på ny; den ændrer ikke historikken.
 
 ## Installation
 
+### HACS
+
+1. Åbn HACS, vælg **Custom repositories**, og tilføj `https://github.com/msamsing/frigate-lpr-ha` som typen **Integration**.
+2. Installér **Frigate LPR Registry** og genstart Home Assistant.
+3. Tilføj integrationen fra **Indstillinger → Enheder og tjenester**. Resten konfigureres i UI'et.
+
+### Manuel installation
+
 1. Kopiér `custom_components/frigate_lpr` til samme placering under Home Assistants konfigurationsmappe.
 2. Genstart Home Assistant.
 3. Gå til **Indstillinger → Enheder og tjenester → Tilføj integration** og vælg **Frigate LPR Registry**.
-4. Behold emnet `frigate/tracked_object_update`, og angiv kamera `rlgade`.
-5. Kontrollér, at Home Assistants MQTT-integration er tilsluttet samme broker som Frigate.
+4. Behold standardemnet `frigate/tracked_object_update`, eller ret det hvis Frigate bruger et andet MQTT-præfiks.
+5. Angiv eventuelt et kameranavn. Et tomt felt accepterer observationer fra alle kameraer.
+6. Kontrollér, at Home Assistants MQTT-integration er tilsluttet samme broker som Frigate.
+
+MQTT-emne og kamerafilter kan senere ændres fra integrationens **Konfigurer**-dialog.
+Frekvensgrænser og kendte plader håndteres under integrationens **Indstillinger**.
+Ingen YAML er nødvendig for selve integrationen.
 
 Frigate sender LPR som `type: lpr` med felterne `id`, `plate`, `camera`, `score` og
-`timestamp`. Andre meddelelsestyper og andre kameraer ignoreres.
+`timestamp`. Andre meddelelsestyper ignoreres. Kameraer filtreres kun, hvis brugeren vælger det.
 
 ## Dashboard
 
 Importér råkonfigurationen fra
 [`dashboard/frigate-lpr-dashboard.yaml`](dashboard/frigate-lpr-dashboard.yaml) som et
-nyt YAML-dashboard. Home Assistant kan give entiteter et andet id, især hvis navnene
-allerede findes; ret derfor de syv oversigts-id'er i filen efter behov.
+nyt YAML-dashboard. Integrationen foreslår stabile, kamerauafhængige entitets-id'er.
+Home Assistant kan tilføje et suffiks, hvis et id allerede findes; ret i så fald id'et i dashboardfilen.
 
 Det sidste kort finder automatisk alle pladesensorer og gør hver række klikbar. Det
 bruger [auto-entities](https://github.com/thomasloven/lovelace-auto-entities), som kan
@@ -57,6 +70,9 @@ Uden auto-entities kan pladesensorerne tilføjes manuelt til et almindeligt
 **Entiteter**-kort; klik giver den samme detaljevisning.
 
 ## Tilføj eller opdater en kendt plade
+
+Åbn integrationen, vælg **Indstillinger**, og vælg **Tilføj eller opdater kendt
+nummerplade**. Samme funktion kan bruges i en automatisering via handlingen nedenfor.
 
 Kør under **Udviklerværktøjer → Handlinger**:
 
@@ -105,7 +121,7 @@ viser de 50 seneste poster for ikke at overbelaste Home Assistants state-databas
   "name": null,
   "plate": "AB12345",
   "score": 0.95,
-  "camera": "rlgade",
+  "camera": "camera_name",
   "timestamp": 1790438400.0,
   "plate_box": [917, 487, 1029, 529]
 }

@@ -20,9 +20,9 @@ class LPRRegistryTests(unittest.TestCase):
     def test_observation_stats_and_deduplication(self):
         registry = LPRRegistry()
         first = datetime(2026, 9, 1, 10, tzinfo=timezone.utc)
-        self.assertTrue(registry.observe("AB12345", first, "event-1", camera="rlgade", score=0.9))
-        self.assertFalse(registry.observe("AB12345", first, "event-1", camera="rlgade", score=0.95))
-        self.assertTrue(registry.observe("AB12345", first + timedelta(hours=26), "event-2", camera="rlgade"))
+        self.assertTrue(registry.observe("AB12345", first, "event-1", camera="test_camera", score=0.9))
+        self.assertFalse(registry.observe("AB12345", first, "event-1", camera="test_camera", score=0.95))
+        self.assertTrue(registry.observe("AB12345", first + timedelta(hours=26), "event-2", camera="test_camera"))
         view = registry.plate_view("AB12345")
         self.assertEqual(view["count"], 2)
         self.assertEqual(view["different_days"], 2)
@@ -36,16 +36,16 @@ class LPRRegistryTests(unittest.TestCase):
         self.assertEqual(registry.plate_view("AB12345")["classification"], "Egen")
         registry.set_metadata("XX12345", "Nabo", "known")
         self.assertEqual(registry.plate_view("XX12345")["classification"], "Kendt lokal")
-        registry.observe("ONE1", start, "1", camera="rlgade")
+        registry.observe("ONE1", start, "1", camera="test_camera")
         self.assertEqual(registry.plate_view("ONE1")["classification"], "Engangsbesøgende")
         for index, hours in enumerate((0, 1, 25)):
-            registry.observe("FREQ1", start + timedelta(hours=hours), str(index), camera="rlgade")
+            registry.observe("FREQ1", start + timedelta(hours=hours), str(index), camera="test_camera")
         self.assertEqual(registry.plate_view("FREQ1")["classification"], "Hyppig")
 
     def test_roundtrip_persistence_and_daily_summary(self):
         registry = LPRRegistry()
         seen = datetime(2026, 9, 26, 12, tzinfo=timezone.utc)
-        registry.observe("AA11111", seen, "a", camera="rlgade")
+        registry.observe("AA11111", seen, "a", camera="test_camera")
         restored = LPRRegistry(registry.data)
         summary = restored.summary("2026-09-26")
         self.assertEqual(summary["unique_today"], 1)

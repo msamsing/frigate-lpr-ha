@@ -9,7 +9,6 @@ CONF_FREQUENT_OBSERVATIONS = "frequent_observations"
 CONF_FREQUENT_DAYS = "frequent_days"
 
 DEFAULT_TOPIC = "frigate/tracked_object_update"
-DEFAULT_CAMERA = "rlgade"
 DEFAULT_FREQUENT_OBSERVATIONS = 10
 DEFAULT_FREQUENT_DAYS = 4
 

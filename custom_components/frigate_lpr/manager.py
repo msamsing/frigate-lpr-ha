@@ -45,7 +45,9 @@ class LPRManager:
     def _message_received(self, message: mqtt.ReceiveMessage) -> None:
         try:
             payload = json.loads(message.payload)
-            if payload.get("type") != "lpr" or payload.get("camera") != self.camera:
+            if payload.get("type") != "lpr":
+                return
+            if self.camera and payload.get("camera") != self.camera:
                 return
             timestamp = datetime.fromtimestamp(float(payload["timestamp"]), tz=dt_util.UTC)
             timestamp = dt_util.as_local(timestamp)
@@ -56,7 +58,7 @@ class LPRManager:
                 plate,
                 timestamp,
                 str(payload.get("id", "")),
-                camera=payload["camera"],
+                camera=str(payload.get("camera", "")),
                 score=payload.get("score"),
                 frigate_name=payload.get("name"),
             )
@@ -67,7 +69,7 @@ class LPRManager:
                 async_dispatcher_send(self.hass, f"{SIGNAL_NEW_PLATE}_{self.entry_id}", normalized_plate)
                 self.hass.bus.async_fire(
                     "frigate_lpr_new_plate",
-                    {"plate": normalized_plate, "camera": payload["camera"], "timestamp": timestamp.isoformat()},
+                    {"plate": normalized_plate, "camera": payload.get("camera", ""), "timestamp": timestamp.isoformat()},
                 )
             async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
         except (ValueError, TypeError, KeyError, json.JSONDecodeError):

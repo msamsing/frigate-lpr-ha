@@ -4,11 +4,20 @@
     "step": {
       "user": {
         "title": "Forbind Frigate LPR",
-        "description": "MQTT-integrationen skal allerede være konfigureret.",
-        "data": {"topic": "MQTT-emne", "camera": "Frigate-kamera"},
+        "description": "MQTT-integrationen skal allerede være konfigureret. Lad kamerafeltet være tomt for at registrere fra alle kameraer.",
+        "data": {"topic": "MQTT-emne", "camera": "Kamera (valgfrit)"},
         "data_description": {
           "topic": "Emnet med LPR-opdateringer fra Frigate.",
-          "camera": "Kun observationer fra dette eksakte kameranavn registreres."
+          "camera": "Angiv et eksakt kameranavn, eller lad feltet være tomt for alle kameraer."
+        }
+      },
+      "reconfigure": {
+        "title": "MQTT-kilde",
+        "description": "Ret MQTT-emne og valgfrit kamerafilter.",
+        "data": {"topic": "MQTT-emne", "camera": "Kamera (valgfrit)"},
+        "data_description": {
+          "topic": "Emnet med LPR-opdateringer fra Frigate.",
+          "camera": "Angiv et eksakt kameranavn, eller lad feltet være tomt for alle kameraer."
         }
       }
     },
@@ -17,12 +26,30 @@
   "options": {
     "step": {
       "init": {
+        "title": "Indstillinger",
+        "menu_options": {
+          "classification": "Klassifikationsgrænser",
+          "add_plate": "Tilføj eller opdater kendt nummerplade",
+          "remove_plate": "Fjern navn og kategori"
+        }
+      },
+      "classification": {
         "title": "Klassifikationsgrænser",
         "data": {
           "frequent_observations": "Mindste antal observationer for Hyppig",
           "frequent_days": "Mindste antal forskellige dage for Hyppig"
         }
+      },
+      "add_plate": {
+        "title": "Tilføj eller opdater kendt nummerplade",
+        "data": {"plate": "Nummerplade", "name": "Navn", "category": "Kategori"}
+      },
+      "remove_plate": {
+        "title": "Fjern navn og kategori",
+        "description": "Observationshistorikken bevares.",
+        "data": {"plate": "Nummerplade"}
       }
-    }
+    },
+    "abort": {"no_known_plates": "Der er endnu ingen kendte nummerplader."}
   }
 }

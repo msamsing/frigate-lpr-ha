@@ -46,7 +46,7 @@ class LPRBaseSensor(SensorEntity):
         self.entry_id = entry_id
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry_id)},
-            "name": f"Frigate LPR {manager.camera}",
+            "name": "Frigate LPR Registry",
             "manufacturer": "Frigate",
             "model": "LPR Registry",
         }
@@ -68,6 +68,7 @@ class LPRSummarySensor(LPRBaseSensor):
         self.key = key
         self._attr_name = name
         self._attr_unique_id = f"{entry_id}_{key}"
+        self._attr_suggested_object_id = f"frigate_lpr_{key}"
 
     @property
     def native_value(self) -> int:
@@ -80,6 +81,7 @@ class LPRListSensor(LPRBaseSensor):
         self.key = key
         self._attr_name = name
         self._attr_unique_id = f"{entry_id}_{key}"
+        self._attr_suggested_object_id = f"frigate_lpr_{key}"
 
     @property
     def native_value(self) -> str:
@@ -100,6 +102,7 @@ class LPRPlateSensor(LPRBaseSensor):
         self.plate = plate
         self._attr_name = plate
         self._attr_unique_id = f"{entry_id}_plate_{plate}"
+        self._attr_suggested_object_id = f"frigate_lpr_plate_{plate.lower()}"
 
     @property
     def native_value(self) -> int:

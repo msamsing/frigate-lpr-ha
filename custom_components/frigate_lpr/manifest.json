@@ -1,11 +1,13 @@
 {
   "domain": "frigate_lpr",
   "name": "Frigate LPR Registry",
-  "codeowners": [],
+  "codeowners": ["@msamsing"],
   "config_flow": true,
   "dependencies": ["mqtt"],
+  "documentation": "https://github.com/msamsing/frigate-lpr-ha#readme",
   "integration_type": "service",
+  "issue_tracker": "https://github.com/msamsing/frigate-lpr-ha/issues",
   "iot_class": "local_push",
   "single_config_entry": true,
-  "version": "1.0.0"
+  "version": "1.1.0"
 }

@@ -7,21 +7,21 @@ views:
       - type: horizontal-stack
         cards:
           - type: entity
-            entity: sensor.frigate_lpr_rlgade_unikke_plader_i_dag
+            entity: sensor.frigate_lpr_unique_today
             name: Unikke i dag
             icon: mdi:car-multiple
           - type: entity
-            entity: sensor.frigate_lpr_rlgade_observationer_i_dag
+            entity: sensor.frigate_lpr_observations_today
             name: Observationer i dag
             icon: mdi:counter
           - type: entity
-            entity: sensor.frigate_lpr_rlgade_unikke_plader_i_alt
+            entity: sensor.frigate_lpr_total_unique
             name: Unikke i alt
             icon: mdi:database
       - type: markdown
         title: Seneste registrerede plader
         content: >-
-          {% set items = state_attr('sensor.frigate_lpr_rlgade_seneste_nummerplade', 'items') or [] %}
+          {% set items = state_attr('sensor.frigate_lpr_recent', 'items') or [] %}
           | Plade | Tid | Score |
           |---|---|---:|
           {% for item in items[:10] %}
@@ -32,7 +32,7 @@ views:
       - type: markdown
         title: Hyppigste plader
         content: >-
-          {% set items = state_attr('sensor.frigate_lpr_rlgade_hyppigste_nummerplader', 'items') or [] %}
+          {% set items = state_attr('sensor.frigate_lpr_frequent', 'items') or [] %}
           | Plade | Navn | Observationer | Dage |
           |---|---|---:|---:|
           {% for item in items %}
@@ -41,14 +41,14 @@ views:
       - type: markdown
         title: Nye / engangsbesøgende
         content: >-
-          {% set items = state_attr('sensor.frigate_lpr_rlgade_nye_og_engangsbesogende', 'items') or [] %}
+          {% set items = state_attr('sensor.frigate_lpr_one_time', 'items') or [] %}
           {% for item in items %}
           **{{ item.plate }}** · {{ as_datetime(item.last_seen).strftime('%d-%m %H:%M') }}  
           {% else %}Ingen{% endfor %}
       - type: markdown
         title: Kendte plader
         content: >-
-          {% set items = state_attr('sensor.frigate_lpr_rlgade_kendte_nummerplader', 'items') or [] %}
+          {% set items = state_attr('sensor.frigate_lpr_known', 'items') or [] %}
           {% for item in items %}
           **{{ item.plate }}** — {{ item.name }} ({{ 'Egen' if item.category == 'own' else 'Kendt lokal' }})  
           {% endfor %}
@@ -61,7 +61,7 @@ views:
           title: Alle nummerplader – klik for detaljer
         filter:
           include:
-            - entity_id: sensor.frigate_lpr_rlgade_*
+            - entity_id: sensor.frigate_lpr_plate_*
               attributes:
                 plate: "*"
         sort:
