@@ -3,7 +3,7 @@
 DOMAIN = "frigate_lpr"
 PLATFORMS = ["sensor", "select"]
 CARD_RESOURCE_PATH = "/frigate_lpr/frigate-lpr-card.js"
-CARD_URL = f"{CARD_RESOURCE_PATH}?v=1.6.0"
+CARD_URL = f"{CARD_RESOURCE_PATH}?v=1.6.1"
 STATIC_URL_PATH = "/frigate_lpr"
 
 CONF_TOPIC = "topic"

@@ -50,7 +50,18 @@ class FrigateLprCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    const signature = Object.values(hass.states || {})
+      .filter((state) => state.attributes.frigate_lpr_view)
+      .map((state) => `${state.entity_id}:${state.state}:${state.last_updated || state.last_changed || ""}`)
+      .sort()
+      .join("|");
+    if (this.shadowRoot?.querySelector("dialog[open]")) {
+      this._lprSignature = signature;
+      return;
+    }
     if (this.shadowRoot?.activeElement?.matches("input, textarea, select")) return;
+    if (signature === this._lprSignature) return;
+    this._lprSignature = signature;
     this._render();
   }
 
