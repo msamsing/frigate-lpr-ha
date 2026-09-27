@@ -78,6 +78,10 @@ class FrigateLprCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    const active = this.shadowRoot?.activeElement;
+    if (this._activeView === "manage" && active?.matches("input, select, textarea")) {
+      return;
+    }
     this._render();
   }
 

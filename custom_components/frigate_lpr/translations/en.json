@@ -1,0 +1,100 @@
+{
+  "title": "Frigate LPR Registry",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect Frigate LPR",
+        "description": "The MQTT integration must already be configured. Leave the camera field empty to accept observations from all cameras.",
+        "data": {
+          "topic": "MQTT topic",
+          "camera": "Camera (optional)"
+        },
+        "data_description": {
+          "topic": "The topic containing LPR updates from Frigate.",
+          "camera": "Enter an exact camera name, or leave empty for all cameras."
+        }
+      },
+      "reconfigure": {
+        "title": "MQTT source",
+        "description": "Change the MQTT topic and optional camera filter.",
+        "data": {
+          "topic": "MQTT topic",
+          "camera": "Camera (optional)"
+        },
+        "data_description": {
+          "topic": "The topic containing LPR updates from Frigate.",
+          "camera": "Enter an exact camera name, or leave empty for all cameras."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "The integration is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Settings",
+        "description": "Choose the area you want to configure. Observations and vehicle cases are preserved when settings are changed.",
+        "menu_options": {
+          "classification": "Classification thresholds",
+          "vehicle_lookup": "Vehicle lookup via MotorAPI",
+          "add_plate": "Add or update a known license plate",
+          "remove_plate": "Remove name and category"
+        },
+        "menu_option_descriptions": {
+          "classification": "Choose when an observed plate is classified as Frequent.",
+          "vehicle_lookup": "Enable optional vehicle data lookup for brand-new unknown plates.",
+          "add_plate": "Create or edit a local vehicle case with name, category and vehicle data.",
+          "remove_plate": "Remove user data from a plate without deleting its observation history."
+        }
+      },
+      "classification": {
+        "title": "Classification thresholds",
+        "data": {
+          "frequent_observations": "Minimum observations for Frequent",
+          "frequent_days": "Minimum different days for Frequent"
+        }
+      },
+      "vehicle_lookup": {
+        "title": "Vehicle lookup via MotorAPI",
+        "description": "Optional lookup of make and model. Only the first observation of a brand-new unknown plate is sent to MotorAPI. Plates named as Own or Known local are never sent. The result is stored so the plate is not looked up again.",
+        "data": {
+          "motorapi_enabled": "Enable lookup for new unknown plates",
+          "motorapi_key": "MotorAPI key"
+        },
+        "data_description": {
+          "motorapi_key": "Get an API key from motorapi.dk. The key is stored in Home Assistant's configuration."
+        }
+      },
+      "add_plate": {
+        "title": "Add or update a known license plate",
+        "data": {
+          "plate": "License plate",
+          "name": "Name",
+          "category": "Category",
+          "notes": "Notes",
+          "make": "Make",
+          "model": "Model",
+          "variant": "Variant",
+          "model_type": "Model type",
+          "model_year": "Model year",
+          "color": "Color",
+          "chassis_type": "Body style",
+          "fuel_type": "Fuel type",
+          "vehicle_type": "Vehicle type"
+        }
+      },
+      "remove_plate": {
+        "title": "Remove name and category",
+        "description": "The observation history is preserved.",
+        "data": {
+          "plate": "License plate"
+        }
+      }
+    },
+    "abort": {
+      "no_known_plates": "There are no known license plates yet."
+    }
+  }
+}

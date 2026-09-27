@@ -27,11 +27,18 @@
     "step": {
       "init": {
         "title": "Indstillinger",
+        "description": "Vælg det område, du vil konfigurere. Dine observationer og køretøjssager bevares, når indstillinger ændres.",
         "menu_options": {
           "classification": "Klassifikationsgrænser",
           "vehicle_lookup": "Køretøjsopslag via MotorAPI",
           "add_plate": "Tilføj eller opdater kendt nummerplade",
           "remove_plate": "Fjern navn og kategori"
+        },
+        "menu_option_descriptions": {
+          "classification": "Bestem hvornår en observeret plade klassificeres som Hyppig.",
+          "vehicle_lookup": "Aktivér valgfrit opslag af bildata for helt nye, ukendte plader.",
+          "add_plate": "Opret eller rediger en lokal køretøjssag med navn, kategori og bildata.",
+          "remove_plate": "Fjern brugerdata fra en plade uden at slette observationshistorikken."
         }
       },
       "classification": {
