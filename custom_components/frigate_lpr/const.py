@@ -3,17 +3,22 @@
 DOMAIN = "frigate_lpr"
 PLATFORMS = ["sensor", "select"]
 CARD_RESOURCE_PATH = "/frigate_lpr/frigate-lpr-card.js"
-CARD_URL = f"{CARD_RESOURCE_PATH}?v=1.4.1"
+CARD_URL = f"{CARD_RESOURCE_PATH}?v=1.5.0"
 STATIC_URL_PATH = "/frigate_lpr"
 
 CONF_TOPIC = "topic"
 CONF_CAMERA = "camera"
 CONF_FREQUENT_OBSERVATIONS = "frequent_observations"
 CONF_FREQUENT_DAYS = "frequent_days"
+CONF_MOTORAPI_ENABLED = "motorapi_enabled"
+CONF_MOTORAPI_KEY = "motorapi_key"
 
 DEFAULT_TOPIC = "frigate/tracked_object_update"
 DEFAULT_FREQUENT_OBSERVATIONS = 10
 DEFAULT_FREQUENT_DAYS = 4
+DEFAULT_MOTORAPI_ENABLED = False
+
+MOTORAPI_URL = "https://v1.motorapi.dk/vehicles/{plate}"
 
 SIGNAL_UPDATE = f"{DOMAIN}_update"
 SIGNAL_NEW_PLATE = f"{DOMAIN}_new_plate"

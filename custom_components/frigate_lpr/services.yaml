@@ -1,6 +1,6 @@
 set_plate:
   name: Tilføj eller opdater kendt nummerplade
-  description: Gem et brugervalgt navn og en eksplicit kategori. Observationshistorikken ændres ikke.
+  description: Gem navn, kategori, køretøjsdata og bemærkninger. Observationshistorikken ændres ikke.
   fields:
     plate:
       name: Nummerplade
@@ -24,6 +24,50 @@ set_plate:
               value: own
             - label: Kendt lokal
               value: known
+    notes:
+      name: Bemærkninger
+      selector:
+        text:
+          multiline: true
+    make:
+      name: Bilmærke
+      selector:
+        text:
+    model:
+      name: Model
+      selector:
+        text:
+    variant:
+      name: Variant
+      selector:
+        text:
+    model_type:
+      name: Modeltype
+      selector:
+        text:
+    model_year:
+      name: Modelår
+      selector:
+        number:
+          min: 1900
+          max: 2100
+          mode: box
+    color:
+      name: Farve
+      selector:
+        text:
+    chassis_type:
+      name: Karrosseri
+      selector:
+        text:
+    fuel_type:
+      name: Drivmiddel
+      selector:
+        text:
+    vehicle_type:
+      name: Køretøjstype
+      selector:
+        text:
 remove_plate_metadata:
   name: Fjern navn og kategori
   description: Fjern kun brugerens metadata; observationer slettes ikke.

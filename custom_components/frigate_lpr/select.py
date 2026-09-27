@@ -75,6 +75,7 @@ class LPRPlateSelect(SelectEntity):
             "frigate_lpr_view": "selected_plate",
             "plate": plate,
             "name": view["name"] or view["frigate_name"],
+            "user_category": view["category"],
             "classification": view["classification"],
             "first_seen": view["first_seen"],
             "last_seen": view["last_seen"],
@@ -82,6 +83,10 @@ class LPRPlateSelect(SelectEntity):
             "different_days": view["different_days"],
             "average_interval_hours": view["average_interval_hours"],
             "observations": view["observations"][-20:],
+            "vehicle": view.get("vehicle"),
+            "vehicle_source": view.get("vehicle_source"),
+            "vehicle_lookup_status": (view.get("vehicle_lookup") or {}).get("status", "not_attempted"),
+            "notes": view.get("notes", ""),
         }
 
     async def async_added_to_hass(self) -> None:

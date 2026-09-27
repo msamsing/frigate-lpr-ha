@@ -22,9 +22,12 @@ from .const import (
     CONF_CAMERA,
     CONF_FREQUENT_DAYS,
     CONF_FREQUENT_OBSERVATIONS,
+    CONF_MOTORAPI_ENABLED,
+    CONF_MOTORAPI_KEY,
     CONF_TOPIC,
     DEFAULT_FREQUENT_DAYS,
     DEFAULT_FREQUENT_OBSERVATIONS,
+    DEFAULT_MOTORAPI_ENABLED,
     DOMAIN,
     PLATFORMS,
     SERVICE_REMOVE_PLATE_METADATA,
@@ -44,6 +47,16 @@ SET_PLATE_SCHEMA = vol.Schema(
         vol.Required("plate"): cv.string,
         vol.Required(CONF_NAME): cv.string,
         vol.Required("category"): vol.In(["own", "known"]),
+        vol.Optional("notes"): cv.string,
+        vol.Optional("make"): cv.string,
+        vol.Optional("model"): cv.string,
+        vol.Optional("variant"): cv.string,
+        vol.Optional("model_type"): cv.string,
+        vol.Optional("model_year"): vol.Coerce(int),
+        vol.Optional("color"): cv.string,
+        vol.Optional("chassis_type"): cv.string,
+        vol.Optional("fuel_type"): cv.string,
+        vol.Optional("vehicle_type"): cv.string,
     }
 )
 REMOVE_SCHEMA = vol.Schema({vol.Required("plate"): cv.string})
@@ -59,12 +72,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -
         entry.data[CONF_CAMERA],
         entry.options.get(CONF_FREQUENT_OBSERVATIONS, DEFAULT_FREQUENT_OBSERVATIONS),
         entry.options.get(CONF_FREQUENT_DAYS, DEFAULT_FREQUENT_DAYS),
+        entry.options.get(CONF_MOTORAPI_ENABLED, DEFAULT_MOTORAPI_ENABLED),
+        entry.options.get(CONF_MOTORAPI_KEY, ""),
     )
     await manager.async_setup()
     entry.runtime_data = manager
 
     async def set_plate(call: ServiceCall) -> None:
-        await manager.async_set_metadata(call.data["plate"], call.data[CONF_NAME], call.data["category"])
+        vehicle_field_map = {
+            "make": "make",
+            "model": "model",
+            "variant": "variant",
+            "model_type": "model_type",
+            "model_year": "model_year",
+            "color": "color",
+            "chassis_type": "chassis_type",
+            "fuel_type": "fuel_type",
+            "vehicle_type": "type",
+        }
+        vehicle = {
+            target: call.data[source]
+            for source, target in vehicle_field_map.items()
+            if source in call.data
+        }
+        await manager.async_set_metadata(
+            call.data["plate"],
+            call.data[CONF_NAME],
+            call.data["category"],
+            notes=call.data.get("notes"),
+            vehicle=vehicle or None,
+        )
 
     async def remove_metadata(call: ServiceCall) -> None:
         await manager.async_remove_metadata(call.data["plate"])

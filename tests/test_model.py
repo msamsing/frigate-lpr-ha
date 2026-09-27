@@ -57,6 +57,57 @@ class LPRRegistryTests(unittest.TestCase):
         self.assertEqual(summary["observations_today"], 1)
         self.assertEqual(summary["one_time"][0]["plate"], "AA11111")
 
+    def test_vehicle_lookup_privacy_and_cache(self):
+        registry = LPRRegistry()
+        seen = datetime(2026, 9, 27, 12, tzinfo=timezone.utc)
+
+        registry.set_metadata("OWN123", "Egen bil", "own")
+        registry.observe("OWN123", seen, "own", camera="test_camera")
+        self.assertFalse(registry.should_lookup_vehicle("OWN123"))
+
+        registry.set_metadata("KNOWN1", "Kendt bil", "known")
+        registry.observe("KNOWN1", seen, "known", camera="test_camera")
+        self.assertFalse(registry.should_lookup_vehicle("KNOWN1"))
+
+        registry.observe("NEW123", seen, "new", camera="test_camera")
+        self.assertTrue(registry.should_lookup_vehicle("NEW123"))
+        registry.mark_vehicle_lookup(
+            "NEW123",
+            {
+                "status": "success",
+                "provider": "motorapi",
+                "vehicle": {"make": "VOLVO", "model": "XC40"},
+            },
+        )
+        self.assertFalse(registry.should_lookup_vehicle("NEW123"))
+        restored = LPRRegistry(registry.data)
+        self.assertFalse(restored.should_lookup_vehicle("NEW123"))
+        recent = restored.summary("2026-09-27")["recent"]
+        new_vehicle = next(item for item in recent if item["plate"] == "NEW123")["vehicle"]
+        self.assertEqual(new_vehicle["model"], "XC40")
+
+    def test_manual_vehicle_case_roundtrip(self):
+        registry = LPRRegistry()
+        registry.set_metadata(
+            "CASE123",
+            "Gæstebil",
+            "known",
+            notes="Må parkere ved bygning A.",
+            vehicle={
+                "make": "Skoda",
+                "model": "Enyaq",
+                "model_year": 2024,
+                "color": "Blå",
+            },
+        )
+        restored = LPRRegistry(registry.data)
+        case = restored.plate_view("CASE123")
+        self.assertEqual(case["classification"], "Kendt lokal")
+        self.assertEqual(case["notes"], "Må parkere ved bygning A.")
+        self.assertEqual(case["vehicle"]["model"], "Enyaq")
+        self.assertEqual(case["vehicle_source"], "manual")
+        self.assertFalse(restored.should_lookup_vehicle("CASE123"))
+
 
 if __name__ == "__main__":
     unittest.main()

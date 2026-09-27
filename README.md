@@ -4,6 +4,11 @@ En lokal Home Assistant-integration, der lytter på Frigates MQTT-emne
 `frigate/tracked_object_update`, registrerer nummerplader persistent og viser dem som
 sensorer i Home Assistant. MQTT-emne og et valgfrit kamerafilter vælges i opsætningsdialogen.
 
+Integrationen og det tilhørende Lovelace-kort er blandt andet tænkt til overblik over
+et privat parkeringsareal ved en boligforening, et privat fællesområde eller lignende.
+Brugen skal altid ske med passende adgangskontrol, skiltning og i overensstemmelse med
+gældende regler om kameraovervågning og behandling af personoplysninger.
+
 Data gemmes i Home Assistants egen `.storage` via `Store`; der kræves ingen ekstern
 database. En genstart af Home Assistant bevarer plader, metadata og hele
 observationshistorikken.
@@ -17,6 +22,8 @@ observationshistorikken.
 - Navngivning og kategori gennem integrationens UI eller handlingen `frigate_lpr.set_plate`.
 - Egne og andre kendte plader kan oprettes efter installationen.
 - Medfølgende Lovelace-kort, som kan vælges og konfigureres direkte i dashboard-editoren.
+- Valgfrit MotorAPI-opslag af mærke, model og andre grunddata for helt nye, ukendte plader.
+- Plader, som brugeren har navngivet eller markeret som Egen/Kendt lokal, sendes aldrig til MotorAPI.
 
 ## Klassifikation
 
@@ -54,6 +61,27 @@ MQTT-emne og kamerafilter kan senere ændres fra integrationens **Konfigurer**-d
 Frekvensgrænser og kendte plader håndteres under integrationens **Indstillinger**.
 Ingen YAML er nødvendig for selve integrationen.
 
+### Valgfrit opslag af køretøjsdata
+
+Under **Indstillinger → Køretøjsopslag via MotorAPI** kan opslag aktiveres med en
+API-nøgle fra [motorapi.dk](https://www.motorapi.dk/). Når en helt ny og ukendt
+nummerplade observeres første gang, hentes og gemmes mærke, model, variant, modelår,
+farve, karrosseri og drivmiddel. Det gemte resultat vises i sensoren og Lovelace-kortet.
+
+Af hensyn til privatliv og API-forbrug gælder følgende:
+
+- En plade, som allerede har et brugerdefineret navn eller kategorien **Egen** eller
+  **Kendt lokal**, sendes aldrig til MotorAPI.
+- Kun plader, der observeres første gang efter funktionen er aktiveret, slås op;
+  eksisterende historik sendes ikke bagudrettet.
+- Ethvert opslag markeres persistent som forsøgt, også hvis pladen ikke findes eller
+  API'et svarer med en fejl. Senere observationer medfører derfor ikke nye API-kald.
+- Kun køretøjets viste grunddata gemmes. Integrationen gemmer ikke VIN fra API-svaret.
+
+Hvis en plade skal beskyttes mod opslag, skal den oprettes som **Egen** eller **Kendt
+lokal**, før den observeres første gang. Når en ukendt plade først er sendt til API'et,
+kan det tidligere netværkskald naturligvis ikke trækkes tilbage.
+
 Frigate sender LPR som `type: lpr` med felterne `id`, `plate`, `camera`, `score` og
 `timestamp`. Andre meddelelsestyper ignoreres. Kameraer filtreres kun, hvis brugeren vælger det.
 
@@ -74,6 +102,12 @@ registrerer selv kortets modul i Home Assistants Lovelace-resource-lager. Kortet
 automatisk integrationens entiteter og opdeler plader grafisk i **Egen**,
 **Kendt lokal**, **Hyppig**, **Sjælden** og **Engangsbesøgende**. Klik på en plade
 for at vise dens historik og observationsfrekvens.
+
+Kortet er responsivt og tilpasser kolonnerne til den plads, det får i dashboardet.
+Under fanen **Administrer** kan egne og kendte nummerplader oprettes og redigeres
+direkte fra Lovelace. Hver bil får en samlet køretøjssag med navn/relation,
+klassifikation, køretøjsdata, observationsstatistik, historik og korte bemærkninger.
+Oplysningerne gemmes af integrationen i Home Assistants persistente lager.
 
 Ved opgradering fra 1.3.1 fjernes det selvstændige **Nummerplader**-dashboard, som
 den version oprettede, automatisk.

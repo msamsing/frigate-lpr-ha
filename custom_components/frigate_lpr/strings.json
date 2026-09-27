@@ -32,6 +32,7 @@
         "title": "Indstillinger",
         "menu_options": {
           "classification": "Klassifikationsgrænser",
+          "vehicle_lookup": "Køretøjsopslag via MotorAPI",
           "add_plate": "Tilføj eller opdater kendt nummerplade",
           "remove_plate": "Fjern navn og kategori"
         }
@@ -43,9 +44,34 @@
           "frequent_days": "Mindste antal forskellige dage for Hyppig"
         }
       },
+      "vehicle_lookup": {
+        "title": "Køretøjsopslag via MotorAPI",
+        "description": "Valgfrit opslag af mærke og model. Kun første observation af en ny, ukendt plade sendes til MotorAPI. Plader navngivet som Egen eller Kendt lokal sendes aldrig. Resultatet gemmes, så pladen ikke slås op igen.",
+        "data": {
+          "motorapi_enabled": "Aktivér opslag for nye ukendte plader",
+          "motorapi_key": "MotorAPI-nøgle"
+        },
+        "data_description": {
+          "motorapi_key": "Hent en API-nøgle på motorapi.dk. Nøglen gemmes i Home Assistants konfiguration."
+        }
+      },
       "add_plate": {
         "title": "Tilføj eller opdater kendt nummerplade",
-        "data": {"plate": "Nummerplade", "name": "Navn", "category": "Kategori"}
+        "data": {
+          "plate": "Nummerplade",
+          "name": "Navn",
+          "category": "Kategori",
+          "notes": "Bemærkninger",
+          "make": "Bilmærke",
+          "model": "Model",
+          "variant": "Variant",
+          "model_type": "Modeltype",
+          "model_year": "Modelår",
+          "color": "Farve",
+          "chassis_type": "Karrosseri",
+          "fuel_type": "Drivmiddel",
+          "vehicle_type": "Køretøjstype"
+        }
       },
       "remove_plate": {
         "title": "Fjern navn og kategori",

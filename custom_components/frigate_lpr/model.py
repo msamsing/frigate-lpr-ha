@@ -28,6 +28,11 @@ class LPRRegistry:
         self.data = data or {"version": 1, "plates": {}, "recent": []}
         self.data.setdefault("plates", {})
         self.data.setdefault("recent", [])
+        for record in self.data["plates"].values():
+            record.setdefault("vehicle", None)
+            record.setdefault("vehicle_lookup", None)
+            record.setdefault("vehicle_source", None)
+            record.setdefault("notes", "")
         self.frequent_observations = frequent_observations
         self.frequent_days = frequent_days
 
@@ -35,7 +40,15 @@ class LPRRegistry:
     def plates(self) -> dict[str, dict[str, Any]]:
         return self.data["plates"]
 
-    def set_metadata(self, plate: str, name: str, category: str) -> str:
+    def set_metadata(
+        self,
+        plate: str,
+        name: str,
+        category: str,
+        *,
+        notes: str | None = None,
+        vehicle: dict[str, Any] | None = None,
+    ) -> str:
         """Add or update user-controlled metadata."""
         key = normalize_plate(plate)
         if not key:
@@ -43,6 +56,15 @@ class LPRRegistry:
         record = self.plates.setdefault(key, self._empty_record(key))
         record["name"] = name.strip()
         record["category"] = category
+        if notes is not None:
+            record["notes"] = notes.strip()
+        if vehicle is not None:
+            record["vehicle"] = {
+                field: value.strip() if isinstance(value, str) else value
+                for field, value in vehicle.items()
+                if value not in (None, "")
+            } or None
+            record["vehicle_source"] = "manual" if record["vehicle"] else None
         return key
 
     def remove_metadata(self, plate: str) -> bool:
@@ -53,6 +75,10 @@ class LPRRegistry:
             return False
         record["name"] = ""
         record["category"] = ""
+        record["notes"] = ""
+        if record.get("vehicle_source") == "manual":
+            record["vehicle"] = None
+            record["vehicle_source"] = None
         if record["count"] == 0:
             del self.plates[key]
         return True
@@ -127,6 +153,25 @@ class LPRRegistry:
             "average_interval_hours": round(sum(intervals) / len(intervals) / 3600, 1) if intervals else None,
         }
 
+    def should_lookup_vehicle(self, plate: str) -> bool:
+        """Return whether a brand-new unknown plate may be sent to a provider."""
+        record = self.plates.get(plate)
+        if record is None:
+            return False
+        return not (
+            record.get("name")
+            or record.get("category") in {"own", "known"}
+            or record.get("vehicle_lookup") is not None
+        )
+
+    def mark_vehicle_lookup(self, plate: str, result: dict[str, Any]) -> None:
+        """Persist a lookup result so the plate is never looked up automatically again."""
+        record = self.plates[plate]
+        record["vehicle_lookup"] = result
+        if result.get("status") == "success":
+            record["vehicle"] = result.get("vehicle")
+            record["vehicle_source"] = "motorapi"
+
     def summary(self, today: str) -> dict[str, Any]:
         plates_today = {
             plate
@@ -142,18 +187,36 @@ class LPRRegistry:
         )
         frequent = sorted(
             (
-                {"plate": plate, "count": record["count"], "days": len(record["days"]), "name": record["name"]}
+                {
+                    "plate": plate,
+                    "count": record["count"],
+                    "days": len(record["days"]),
+                    "name": record["name"],
+                    "vehicle": record.get("vehicle"),
+                    "notes": record.get("notes", ""),
+                }
                 for plate, record in self.plates.items()
             ),
             key=lambda item: (-item["count"], item["plate"]),
         )[:10]
         known = [
-            {"plate": plate, "name": record["name"], "category": record["category"]}
+            {
+                "plate": plate,
+                "name": record["name"],
+                "category": record["category"],
+                "vehicle": record.get("vehicle"),
+                "notes": record.get("notes", ""),
+            }
             for plate, record in sorted(self.plates.items())
             if record["name"] or record["category"]
         ]
         one_time = [
-            {"plate": plate, "last_seen": record["last_seen"]}
+            {
+                "plate": plate,
+                "last_seen": record["last_seen"],
+                "vehicle": record.get("vehicle"),
+                "notes": record.get("notes", ""),
+            }
             for plate, record in self.plates.items()
             if record["count"] == 1
         ]
@@ -168,6 +231,8 @@ class LPRRegistry:
                     "days": len(record["days"]),
                     "last_seen": record["last_seen"],
                     "classification": classification,
+                    "vehicle": record.get("vehicle"),
+                    "notes": record.get("notes", ""),
                 }
             )
         for items in classified.values():
@@ -175,7 +240,10 @@ class LPRRegistry:
         return {
             "unique_today": len(plates_today),
             "observations_today": all_today_count,
-            "recent": self.data["recent"][:20],
+            "recent": [
+                {**item, "vehicle": self.plates.get(item["plate"], {}).get("vehicle")}
+                for item in self.data["recent"][:20]
+            ],
             "frequent": frequent,
             "known": known,
             "one_time": sorted(one_time, key=lambda item: item["last_seen"] or "", reverse=True)[:20],
@@ -201,4 +269,8 @@ class LPRRegistry:
             "intervals_seconds": [],
             "observations": [],
             "event_ids": [],
+            "vehicle": None,
+            "vehicle_lookup": None,
+            "vehicle_source": None,
+            "notes": "",
         }

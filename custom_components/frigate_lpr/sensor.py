@@ -56,7 +56,13 @@ class LPRBaseSensor(SensorEntity):
         }
 
     async def async_added_to_hass(self) -> None:
-        self.async_on_remove(async_dispatcher_connect(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}", self._handle_update))
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                f"{SIGNAL_UPDATE}_{self.entry_id}",
+                self._handle_update,
+            )
+        )
 
     @callback
     def _handle_update(self) -> None:
@@ -137,4 +143,8 @@ class LPRPlateSensor(LPRBaseSensor):
             "observations": view["observations"][-50:],
             "shown_observations": min(50, view["count"]),
             "stored_observations": view["count"],
+            "vehicle": view.get("vehicle"),
+            "vehicle_source": view.get("vehicle_source"),
+            "vehicle_lookup_status": (view.get("vehicle_lookup") or {}).get("status", "not_attempted"),
+            "notes": view.get("notes", ""),
         }
