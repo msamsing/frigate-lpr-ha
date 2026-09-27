@@ -47,6 +47,28 @@ class LPRRegistryTests(unittest.TestCase):
         self.assertEqual(summary["frequent_class"][0]["plate"], "FREQ1")
         self.assertEqual(summary["one_time"][0]["plate"], "ONE1")
 
+    def test_explicit_unknown_and_unwanted_categories(self):
+        registry = LPRRegistry()
+        registry.set_metadata("UNK123", "", "unknown")
+        registry.set_metadata("BAD123", "", "unwanted")
+
+        self.assertEqual(registry.plate_view("UNK123")["classification"], "Ukendt")
+        self.assertEqual(registry.plate_view("BAD123")["classification"], "Uønsket")
+        self.assertTrue(registry.should_lookup_vehicle("UNK123"))
+        self.assertFalse(registry.should_lookup_vehicle("BAD123"))
+
+    def test_time_statistics_for_dashboard(self):
+        registry = LPRRegistry()
+        today = datetime.now(timezone.utc).replace(hour=8, minute=30, second=0, microsecond=0)
+        registry.observe("TIME123", today - timedelta(days=1), "1", camera="test_camera")
+        registry.observe("TIME123", today, "2", camera="test_camera")
+        stats = registry.plate_view("TIME123")["time_stats"]
+
+        self.assertEqual(stats["last_7_days"], 2)
+        self.assertEqual(stats["typical_minute"], 510)
+        self.assertEqual(stats["hour_counts"][8], 2)
+        self.assertEqual(sum(day["count"] for day in stats["daily_counts"]), 2)
+
     def test_roundtrip_persistence_and_daily_summary(self):
         registry = LPRRegistry()
         seen = datetime(2026, 9, 26, 12, tzinfo=timezone.utc)
@@ -107,6 +129,30 @@ class LPRRegistryTests(unittest.TestCase):
         self.assertEqual(case["vehicle"]["model"], "Enyaq")
         self.assertEqual(case["vehicle_source"], "manual")
         self.assertFalse(restored.should_lookup_vehicle("CASE123"))
+
+    def test_manual_edit_preserves_unexposed_api_fields(self):
+        registry = LPRRegistry({}, frequent_observations=5, frequent_days=3)
+        registry.observe(
+            "CASE123",
+            datetime(2026, 1, 1, 10, tzinfo=timezone.utc),
+            "event-1",
+            camera="test_camera",
+        )
+        registry.mark_vehicle_lookup(
+            "CASE123",
+            {
+                "status": "success",
+                "vehicle": {"make": "SKODA", "model": "ENYAQ", "vin": "SECRET"},
+            },
+        )
+        registry.set_metadata(
+            "CASE123",
+            "Nabo",
+            "known",
+            vehicle={"make": "Skoda", "model": "Enyaq"},
+        )
+
+        self.assertEqual(registry.plates["CASE123"]["vehicle"]["vin"], "SECRET")
 
 
 if __name__ == "__main__":

@@ -1,400 +1,282 @@
 const CARD_NAME = "frigate-lpr-card";
 
-const VIEWS = {
-  overview: { label: "Overblik", icon: "⌂" },
-  recent: { label: "Seneste", icon: "◷" },
-  own: { label: "Egne", icon: "●" },
-  known_local: { label: "Kendte", icon: "●" },
-  frequent_class: { label: "Hyppige", icon: "●" },
-  rare: { label: "Sjældne", icon: "●" },
-  one_time: { label: "Engangs", icon: "●" },
-  manage: { label: "Administrer", icon: "✎" },
-};
-
-const CLASS_INFO = {
-  Egen: { color: "#2e9d58", background: "rgba(46,157,88,.13)" },
-  "Kendt lokal": { color: "#3788d8", background: "rgba(55,136,216,.13)" },
-  Hyppig: { color: "#e78a24", background: "rgba(231,138,36,.14)" },
-  Sjælden: { color: "#89919a", background: "rgba(137,145,154,.14)" },
-  Engangsbesøgende: { color: "#9a63d5", background: "rgba(154,99,213,.14)" },
-};
-
-const VIEW_CLASS = {
-  own: "Egen",
-  known_local: "Kendt lokal",
-  frequent_class: "Hyppig",
-  rare: "Sjælden",
-  one_time: "Engangsbesøgende",
+const CATEGORY = {
+  own: { label: "Egen", color: "#3b82f6", icon: "mdi:home-garage" },
+  known: { label: "Kendt", color: "#2e9d58", icon: "mdi:account-check" },
+  unknown: { label: "Ukendt", color: "#b7791f", icon: "mdi:help-circle-outline" },
+  unwanted: { label: "Uønsket", color: "#d64545", icon: "mdi:alert-circle-outline" },
 };
 
 const escapeHtml = (value) => String(value ?? "")
-  .replaceAll("&", "&amp;")
-  .replaceAll("<", "&lt;")
-  .replaceAll(">", "&gt;")
-  .replaceAll('"', "&quot;")
-  .replaceAll("'", "&#039;");
+  .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+  .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 
-const formatDate = (value) => {
+const formatDate = (value, timeOnly = false) => {
   if (!value) return "–";
   const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "–"
-    : new Intl.DateTimeFormat(undefined, {
-        day: "2-digit", month: "2-digit", year: "numeric",
-        hour: "2-digit", minute: "2-digit",
-      }).format(date);
+  if (Number.isNaN(date.getTime())) return "–";
+  return new Intl.DateTimeFormat(undefined, timeOnly
+    ? { hour: "2-digit", minute: "2-digit" }
+    : { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+};
+
+const clock = (minute) => minute == null ? "–" : `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
+const categoryKey = (item) => ["own", "known", "unwanted"].includes(item?.user_category || item?.category)
+  ? (item.user_category || item.category) : "unknown";
+const plateDisplay = (plate) => {
+  const clean = String(plate || "");
+  return clean.length > 2 ? `${clean.slice(0, 2)} ${clean.slice(2)}` : clean;
 };
 
 class FrigateLprCard extends HTMLElement {
-  static getConfigElement() {
-    return document.createElement("frigate-lpr-card-editor");
-  }
-
-  static getStubConfig() {
-    return {
-      title: "Nummerpladeregister",
-      default_view: "overview",
-      max_items: 10,
-      show_summary: true,
-      show_details: true,
-    };
-  }
+  static getConfigElement() { return document.createElement("frigate-lpr-card-editor"); }
+  static getStubConfig() { return { title: "Køretøjsregister", max_items: 50, show_summary: true, show_details: true }; }
 
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    this._activeView = null;
     this._selectedPlate = null;
-    this._draft = null;
-    this._saveMessage = "";
+    this._mobileTab = "recent";
+    this._search = "";
+    this._filter = "all";
+    this._sort = "last_seen";
+    this._message = "";
   }
 
   setConfig(config) {
     this._config = { ...FrigateLprCard.getStubConfig(), ...config };
-    if (!VIEWS[this._config.default_view]) this._config.default_view = "overview";
-    this._activeView ??= this._config.default_view;
     this._render();
   }
 
   set hass(hass) {
     this._hass = hass;
-    const active = this.shadowRoot?.activeElement;
-    if (this._activeView === "manage" && active?.matches("input, select, textarea")) {
-      return;
-    }
+    if (this.shadowRoot?.activeElement?.matches("input, textarea, select")) return;
     this._render();
   }
 
-  getCardSize() {
-    return this._config?.show_details ? 10 : 7;
-  }
+  getCardSize() { return 12; }
 
   _entity(view) {
-    return Object.values(this._hass?.states || {}).find(
-      (state) => state.attributes.frigate_lpr_view === view,
-    );
+    return Object.values(this._hass?.states || {}).find((state) => state.attributes.frigate_lpr_view === view);
   }
 
-  _items(view) {
-    return this._entity(view)?.attributes.items || [];
+  _vehicles() {
+    return Object.values(this._hass?.states || {})
+      .filter((state) => state.attributes.frigate_lpr_view === "plate")
+      .map((state) => ({ ...state.attributes, observations_count: state.attributes.stored_observations ?? Number(state.state) ?? 0 }));
   }
 
-  _plateDetails() {
-    const selected = this._entity("selected_plate");
-    if (!selected) return null;
-    if (!this._selectedPlate || selected.attributes.plate === this._selectedPlate) {
-      return selected.attributes;
-    }
-    const sensor = Object.values(this._hass.states).find(
-      (state) => state.attributes.frigate_lpr_view === "plate"
-        && state.attributes.plate === this._selectedPlate,
-    );
-    if (!sensor) return null;
-    return {
-      ...sensor.attributes,
-      observations_count: sensor.attributes.stored_observations ?? sensor.state,
-    };
+  _selected() {
+    const vehicles = this._vehicles();
+    return vehicles.find((item) => item.plate === this._selectedPlate)
+      || vehicles.find((item) => item.plate === this._entity("selected_plate")?.attributes.plate)
+      || vehicles[0] || null;
   }
 
-  _classification(item, view) {
-    return item.classification || VIEW_CLASS[view] || "Sjælden";
-  }
-
-  _plateRows(items, view) {
-    const max = Math.max(1, Number(this._config.max_items) || 10);
-    if (!items.length) return '<div class="empty">Ingen nummerplader i denne visning endnu</div>';
-    return items.slice(0, max).map((item) => {
-      const classification = this._classification(item, view);
-      const info = CLASS_INFO[classification] || CLASS_INFO.Sjælden;
+  _filteredVehicles() {
+    const query = this._search.trim().toLocaleLowerCase();
+    const items = this._vehicles().filter((item) => {
       const vehicle = item.vehicle || {};
-      const vehicleLabel = [vehicle.make, vehicle.model].filter(Boolean).join(" ");
-      const meta = view === "recent"
-        ? `${formatDate(item.timestamp)}${item.score == null ? "" : ` · ${Math.round(item.score * 100)} %`}`
-        : `${item.count ?? 1} observation${(item.count ?? 1) === 1 ? "" : "er"}${item.days ? ` · ${item.days} dage` : ""}`;
-      return `<button class="plate-row" data-plate="${escapeHtml(item.plate)}">
-        <span class="dot" style="--dot:${info.color}"></span>
-        <span class="plate-main"><strong>${escapeHtml(item.plate)}</strong>
-          <small>${escapeHtml(item.name || vehicleLabel || classification)} · ${escapeHtml(meta)}</small></span>
-        <ha-icon icon="mdi:chevron-right"></ha-icon>
-      </button>`;
-    }).join("");
+      const haystack = [item.plate, item.name, vehicle.make, vehicle.model, vehicle.color].join(" ").toLocaleLowerCase();
+      return (!query || haystack.includes(query)) && (this._filter === "all" || categoryKey(item) === this._filter);
+    });
+    return items.sort((a, b) => {
+      if (this._sort === "plate") return a.plate.localeCompare(b.plate);
+      if (this._sort === "count") return (b.observations_count || 0) - (a.observations_count || 0);
+      return String(b.last_seen || "").localeCompare(String(a.last_seen || ""));
+    });
   }
 
-  _overview() {
-    return `<div class="category-grid">${Object.entries(VIEW_CLASS).map(([view, label]) => {
-      const items = this._items(view);
-      const info = CLASS_INFO[label];
-      return `<button class="category" data-view="${view}" style="--accent:${info.color};--tint:${info.background}">
-        <span class="category-icon"><ha-icon icon="${view === "own" ? "mdi:home-garage" : view === "known_local" ? "mdi:map-marker-account" : view === "frequent_class" ? "mdi:repeat" : view === "one_time" ? "mdi:star-four-points" : "mdi:car-outline"}"></ha-icon></span>
-        <span><strong>${escapeHtml(label)}</strong><small>${items.length} plader</small></span>
-      </button>`;
-    }).join("")}</div>
-    <section><div class="section-title"><span>Seneste registreringer</span><button data-view="recent">Vis alle</button></div>
-    ${this._plateRows(this._items("recent"), "recent")}</section>`;
+  _badge(item) {
+    const key = categoryKey(item);
+    const category = CATEGORY[key];
+    return `<span class="badge" style="--category:${category.color}"><ha-icon icon="${category.icon}"></ha-icon>${category.label}</span>`;
   }
 
-  _details() {
-    if (!this._config.show_details) return "";
-    const details = this._plateDetails();
-    if (!details?.plate) return '<div class="details empty">Klik på en nummerplade for at se detaljer</div>';
-    const info = CLASS_INFO[details.classification] || CLASS_INFO.Sjælden;
-    const vehicle = details.vehicle || {};
-    const vehicleTitle = [vehicle.make, vehicle.model].filter(Boolean).join(" ");
-    const observations = (details.observations || []).slice(-5).reverse();
-    return `<section class="details" style="--accent:${info.color};--tint:${info.background}">
-      <div class="detail-head"><div><span class="badge">${escapeHtml(details.classification)}</span>
-        <h2>${escapeHtml(details.plate)}</h2><p>${escapeHtml(details.name || "Ikke navngivet")}</p></div>
-        <ha-icon icon="mdi:card-account-details-outline"></ha-icon></div>
-      <div class="detail-grid">
-        <span><small>Observationer</small><strong>${escapeHtml(details.observations_count ?? details.stored_observations ?? 0)}</strong></span>
-        <span><small>Forskellige dage</small><strong>${escapeHtml(details.different_days ?? 0)}</strong></span>
-        <span><small>Gns. interval</small><strong>${details.average_interval_hours == null ? "–" : `${escapeHtml(details.average_interval_hours)} t`}</strong></span>
+  _vehicleList() {
+    const vehicles = this._filteredVehicles().slice(0, Math.max(1, Number(this._config.max_items) || 50));
+    return `<section class="vehicle-panel panel" aria-label="Køretøjer">
+      <div class="panel-title"><div><small>KØRETØJER</small><h2>${this._vehicles().length} registrerede</h2></div><button class="icon-button new-case" title="Ny køretøjssag"><ha-icon icon="mdi:plus"></ha-icon></button></div>
+      <label class="search"><ha-icon icon="mdi:magnify"></ha-icon><input id="vehicle-search" type="search" placeholder="Søg nummerplade, mærke eller model" value="${escapeHtml(this._search)}"></label>
+      <div class="list-controls">
+        <select id="category-filter" aria-label="Filtrer kategori"><option value="all">Alle kategorier</option>${Object.entries(CATEGORY).map(([key, value]) => `<option value="${key}" ${this._filter === key ? "selected" : ""}>${value.label}</option>`).join("")}</select>
+        <select id="vehicle-sort" aria-label="Sortér køretøjer"><option value="last_seen" ${this._sort === "last_seen" ? "selected" : ""}>Senest set</option><option value="count" ${this._sort === "count" ? "selected" : ""}>Flest passager</option><option value="plate" ${this._sort === "plate" ? "selected" : ""}>Nummerplade</option></select>
       </div>
-      ${vehicleTitle ? `<div class="vehicle"><ha-icon icon="mdi:car-info"></ha-icon><div>
-        <strong>${escapeHtml(vehicleTitle)}</strong>
-        <small>${escapeHtml([vehicle.variant, vehicle.model_year, vehicle.color, vehicle.fuel_type].filter(Boolean).join(" · "))}</small>
-      </div></div>` : ""}
-      ${details.notes ? `<div class="notes"><strong>Bemærkninger</strong><p>${escapeHtml(details.notes)}</p></div>` : ""}
-      <dl><div><dt>Første observation</dt><dd>${formatDate(details.first_seen)}</dd></div>
-        <div><dt>Seneste observation</dt><dd>${formatDate(details.last_seen)}</dd></div></dl>
-      ${observations.length ? `<div class="history"><strong>Seneste historik</strong>${observations.map((item) =>
-        `<div><span>${formatDate(item.timestamp)}</span><small>${escapeHtml(item.camera || "Alle kameraer")}${item.score == null ? "" : ` · ${Math.round(item.score * 100)} %`}</small></div>`).join("")}</div>` : ""}
-      <button class="edit-case" data-edit-plate="${escapeHtml(details.plate)}"><ha-icon icon="mdi:pencil"></ha-icon> Rediger køretøjssag</button>
+      <div class="vehicle-list">${vehicles.length ? vehicles.map((item) => {
+        const vehicle = item.vehicle || {};
+        const selected = this._selected()?.plate === item.plate;
+        return `<button class="vehicle-row ${selected ? "selected" : ""}" data-plate="${escapeHtml(item.plate)}">
+          <span class="mini-plate">${escapeHtml(plateDisplay(item.plate))}</span>
+          <span class="vehicle-copy"><strong>${escapeHtml([vehicle.make, vehicle.model].filter(Boolean).join(" ") || item.name || "Ukendt køretøj")}</strong><small>${escapeHtml(vehicle.color || "Farve ukendt")} · ${formatDate(item.last_seen)}</small></span>
+          <span class="row-meta">${this._badge(item)}<small>${item.observations_count || 0} passager</small></span>
+        </button>`;
+      }).join("") : '<div class="empty">Ingen køretøjer matcher søgningen</div>'}</div>
     </section>`;
   }
 
-  _manage() {
-    const draft = this._draft || {
-      plate: "", name: "", category: "known", notes: "", make: "", model: "",
-      variant: "", model_type: "", model_year: "", color: "", chassis_type: "",
-      fuel_type: "", vehicle_type: "",
-    };
-    const known = [...this._items("own"), ...this._items("known_local")];
-    const field = (id, label, type = "text") => `<label><span>${label}</span><input data-draft="${id}" type="${type}" value="${escapeHtml(draft[id] ?? "")}"></label>`;
-    return `<section class="manage-panel">
-      <div class="section-title"><span>${draft.plate ? `Rediger ${escapeHtml(draft.plate)}` : "Ny køretøjssag"}</span>
-        <button data-new-case>Ny</button></div>
-      <p class="privacy-note"><ha-icon icon="mdi:shield-lock-outline"></ha-icon>
-        Egne og kendte plader gemmes lokalt og sendes ikke til MotorAPI.</p>
-      <form id="case-form">
-        <div class="form-grid">
-          ${field("plate", "Nummerplade")}${field("name", "Navn / relation")}
-          <label><span>Kategori</span><select data-draft="category">
-            <option value="known" ${draft.category === "known" ? "selected" : ""}>Kendt lokal</option>
-            <option value="own" ${draft.category === "own" ? "selected" : ""}>Egen</option>
-          </select></label>
-          ${field("make", "Bilmærke")}${field("model", "Model")}${field("variant", "Variant")}
-          ${field("model_type", "Modeltype")}
-          ${field("model_year", "Modelår", "number")}${field("color", "Farve")}
-          ${field("chassis_type", "Karrosseri")}${field("fuel_type", "Drivmiddel")}${field("vehicle_type", "Køretøjstype")}
-          <label class="wide"><span>Korte bemærkninger</span><textarea data-draft="notes" rows="3">${escapeHtml(draft.notes ?? "")}</textarea></label>
-        </div>
-        <button class="save-case" type="submit"><ha-icon icon="mdi:content-save"></ha-icon> Gem køretøjssag</button>
-        ${this._saveMessage ? `<span class="save-message">${escapeHtml(this._saveMessage)}</span>` : ""}
+  _statCard(label, value) { return `<div class="stat"><small>${label}</small><strong>${escapeHtml(value)}</strong></div>`; }
+
+  _timeChart(stats) {
+    const counts = stats?.hour_counts || Array(24).fill(0);
+    const max = Math.max(1, ...counts);
+    const bars = counts.map((count, hour) => `<rect x="${hour * 10 + 2}" y="${54 - count / max * 46}" width="7" height="${Math.max(count ? 2 : 0, count / max * 46)}" rx="2" class="chart-bar"><title>${String(hour).padStart(2, "0")}:00 · ${count} passager</title></rect>`).join("");
+    return `<div class="chart"><div class="chart-title"><strong>Tidspunkt for passager</strong><span>Hele historikken</span></div><svg viewBox="0 0 242 76" role="img" aria-label="Fordeling af passager over døgnets 24 timer">${bars}<line x1="2" y1="55" x2="239" y2="55" class="axis"/><text x="2" y="70">00</text><text x="118" y="70">12</text><text x="226" y="70">23</text></svg></div>`;
+  }
+
+  _dailyChart(stats) {
+    const days = stats?.daily_counts || [];
+    const max = Math.max(1, ...days.map((day) => day.count));
+    return `<div class="chart compact"><div class="chart-title"><strong>Passager seneste uge</strong><span>${days.reduce((sum, day) => sum + day.count, 0)} i alt</span></div><div class="day-bars">${days.map((day) => `<div><span style="height:${Math.max(day.count ? 4 : 1, day.count / max * 52)}px" title="${escapeHtml(day.date)}: ${day.count}"></span><small>${new Intl.DateTimeFormat(undefined, { weekday: "narrow" }).format(new Date(`${day.date}T12:00:00`))}</small></div>`).join("")}</div></div>`;
+  }
+
+  _conclusion(item) {
+    const stats = item.time_stats || {};
+    if ((item.observations_count || 0) <= 1) return "Kun observeret én gang";
+    if (stats.spread_minutes != null && stats.spread_minutes <= 75 && stats.typical_minute < 720) return "Regelmæssigt morgenmønster";
+    if (stats.spread_minutes != null && stats.spread_minutes <= 90) return "Passerer ofte på omtrent samme tidspunkt";
+    if (item.different_days >= 4 && item.observations_count >= 8) return "Hyppigt observeret lokalt køretøj";
+    return "Uregelmæssige observationer";
+  }
+
+  _detail() {
+    const item = this._selected();
+    if (!item) return '<section class="detail-panel panel empty">Vælg eller opret et køretøj for at se detaljer</section>';
+    const vehicle = item.vehicle || {};
+    const stats = item.time_stats || {};
+    const category = categoryKey(item);
+    const masterData = Object.entries(vehicle).sort(([a], [b]) => a.localeCompare(b));
+    return `<section class="detail-panel panel" aria-label="Køretøjsdetaljer">
+      <div class="detail-top"><div><small>VALGT KØRETØJ</small><div class="license-plate"><span>DK</span>${escapeHtml(plateDisplay(item.plate))}</div></div>${this._badge(item)}</div>
+      <div class="identity"><div><h2>${escapeHtml([vehicle.make, vehicle.model].filter(Boolean).join(" ") || "Ukendt køretøj")}</h2><p>${escapeHtml([vehicle.variant, vehicle.model_year, vehicle.color].filter(Boolean).join(" · ") || item.name || "Ingen stamdata")}</p></div><button class="icon-button api-lookup" title="Hent stamdata" ${this._entity("selected_plate")?.attributes.motorapi_enabled ? "" : "disabled"}><ha-icon icon="mdi:database-sync-outline"></ha-icon></button></div>
+      <form id="detail-form">
+        <div class="category-editor" role="group" aria-label="Kategori">${Object.entries(CATEGORY).map(([key, value]) => `<label style="--category:${value.color}"><input type="radio" name="category" value="${key}" ${category === key ? "checked" : ""}><span><ha-icon icon="${value.icon}"></ha-icon>${value.label}</span></label>`).join("")}</div>
+        <label class="notes-editor"><span>Bemærkning</span><textarea id="detail-notes" rows="2" placeholder="Tilføj en kort bemærkning…">${escapeHtml(item.notes || "")}</textarea></label>
+        <div class="detail-actions"><button type="submit" class="primary"><ha-icon icon="mdi:content-save-outline"></ha-icon>Gem ændringer</button><button type="button" class="edit-full"><ha-icon icon="mdi:pencil-outline"></ha-icon>Rediger stamdata</button></div>
+        ${this._message ? `<p class="message">${escapeHtml(this._message)}</p>` : ""}
       </form>
-      <div class="known-cases"><strong>Gemte egne og kendte køretøjer</strong>
-        ${known.length ? known.map((item) => `<button data-edit-known="${escapeHtml(item.plate)}"><b>${escapeHtml(item.plate)}</b><span>${escapeHtml(item.name || [item.vehicle?.make, item.vehicle?.model].filter(Boolean).join(" ") || item.classification)}</span></button>`).join("") : '<div class="empty">Ingen gemte køretøjssager endnu</div>'}
-      </div>
+      <div class="facts"><span><small>Mærke</small><strong>${escapeHtml(vehicle.make || "–")}</strong></span><span><small>Model</small><strong>${escapeHtml(vehicle.model || "–")}</strong></span><span><small>Farve</small><strong>${escapeHtml(vehicle.color || "–")}</strong></span><span><small>Årgang</small><strong>${escapeHtml(vehicle.model_year || "–")}</strong></span><span><small>Første gang set</small><strong>${formatDate(item.first_seen)}</strong></span><span><small>Senest set</small><strong>${formatDate(item.last_seen)}</strong></span></div>
+      <div class="stats-grid">${this._statCard("Set totalt", item.observations_count || 0)}${this._statCard("Seneste 7 dage", stats.last_7_days ?? 0)}${this._statCard("Seneste 30 dage", stats.last_30_days ?? 0)}${this._statCard("Forskellige dage", item.different_days || 0)}${this._statCard("Typisk tidspunkt", clock(stats.typical_minute))}${this._statCard("Spredning", stats.spread_minutes == null ? "–" : `± ${stats.spread_minutes} min`)}</div>
+      <div class="time-range"><span><small>Tidligste passage</small><strong>${clock(stats.earliest_minute)}</strong></span><ha-icon icon="mdi:arrow-right"></ha-icon><span><small>Seneste passage</small><strong>${clock(stats.latest_minute)}</strong></span></div>
+      <div class="charts">${this._timeChart(stats)}${this._dailyChart(stats)}</div>
+      <p class="insight"><ha-icon icon="mdi:chart-timeline-variant-shimmer"></ha-icon><span><small>Automatisk mønsterbeskrivelse</small><strong>${escapeHtml(this._conclusion(item))}</strong></span></p>
+      ${masterData.length ? `<details class="master-data"><summary>Alle lokalt gemte stamdata (${masterData.length})</summary><dl>${masterData.map(([key, value]) => `<div><dt>${escapeHtml(key.replaceAll("_", " "))}</dt><dd>${escapeHtml(typeof value === "object" ? JSON.stringify(value) : value)}</dd></div>`).join("")}</dl></details>` : ""}
     </section>`;
   }
 
-  _startEditing(plate) {
-    const sensor = Object.values(this._hass.states).find(
-      (state) => state.attributes.frigate_lpr_view === "plate" && state.attributes.plate === plate,
-    );
-    const details = sensor?.attributes || {};
-    const vehicle = details.vehicle || {};
-    this._draft = {
-      plate,
-      name: details.name || "",
-      category: details.user_category || (details.classification === "Egen" ? "own" : "known"),
-      notes: details.notes || "",
-      make: vehicle.make || "",
-      model: vehicle.model || "",
-      variant: vehicle.variant || "",
-      model_type: vehicle.model_type || "",
-      model_year: vehicle.model_year || "",
-      color: vehicle.color || "",
-      chassis_type: vehicle.chassis_type || "",
-      fuel_type: vehicle.fuel_type || "",
-      vehicle_type: vehicle.type || "",
-    };
-    this._saveMessage = "";
-    this._activeView = "manage";
-    this._render();
+  _recent() {
+    const items = this._entity("recent")?.attributes.items || [];
+    return `<aside class="recent-panel panel" aria-label="Seneste passager"><div class="panel-title"><div><small>LIVE OVERSIGT</small><h2>Seneste passager</h2></div><ha-icon icon="mdi:history"></ha-icon></div><div class="recent-list">${items.length ? items.map((item) => {
+      const vehicle = item.vehicle || {};
+      return `<button class="recent-row" data-plate="${escapeHtml(item.plate)}"><time>${formatDate(item.timestamp, true)}</time><span><strong>${escapeHtml(plateDisplay(item.plate))}</strong><small>${escapeHtml([vehicle.make, vehicle.model].filter(Boolean).join(" ") || item.name || "Ukendt køretøj")}</small></span>${this._badge(item)}</button>`;
+    }).join("") : '<div class="empty">Ingen passager registreret endnu</div>'}</div></aside>`;
+  }
+
+  _mobileNav() {
+    return `<nav class="mobile-nav" aria-label="Kortvisning">${[["recent", "Seneste", "mdi:history"], ["vehicles", "Køretøjer", "mdi:car-multiple"], ["details", "Detaljer", "mdi:card-account-details-outline"]].map(([key, label, icon]) => `<button data-mobile-tab="${key}" class="${this._mobileTab === key ? "active" : ""}"><ha-icon icon="${icon}"></ha-icon>${label}</button>`).join("")}</nav>`;
   }
 
   _render() {
-    if (!this.shadowRoot || !this._config || !this._hass) return;
+    if (!this.shadowRoot || !this._hass || !this._config) return;
     const unique = this._entity("unique_today")?.state ?? "0";
     const observations = this._entity("observations_today")?.state ?? "0";
-    const total = this._entity("total_unique")?.state ?? "0";
-    const view = this._activeView || "overview";
-    const body = view === "overview"
-      ? this._overview()
-      : view === "manage"
-        ? this._manage()
-        : `<section><div class="section-title"><span>${escapeHtml(VIEWS[view].label)}</span></div>${this._plateRows(this._items(view), view)}</section>`;
+    this.shadowRoot.innerHTML = `<style>${FrigateLprCard.styles}</style><ha-card><header><div><small>FRIGATE LPR</small><h1>${escapeHtml(this._config.title)}</h1></div>${this._config.show_summary ? `<div class="headline-stats"><span><strong>${escapeHtml(unique)}</strong> unikke i dag</span><span><strong>${escapeHtml(observations)}</strong> passager i dag</span></div>` : ""}</header>${this._mobileNav()}<main data-mobile-active="${this._mobileTab}">${this._vehicleList()}${this._config.show_details ? this._detail() : ""}${this._recent()}</main></ha-card>`;
+    this._bind();
+  }
 
-    this.shadowRoot.innerHTML = `<style>${FrigateLprCard.styles}</style><ha-card>
-      <header><div><span class="eyebrow">FRIGATE LPR</span><h1>${escapeHtml(this._config.title)}</h1></div>
-        <ha-icon icon="mdi:car-search"></ha-icon></header>
-      ${this._config.show_summary ? `<div class="summary">
-        <div><strong>${escapeHtml(unique)}</strong><span>Unikke i dag</span></div>
-        <div><strong>${escapeHtml(observations)}</strong><span>Observationer</span></div>
-        <div><strong>${escapeHtml(total)}</strong><span>I alt</span></div></div>` : ""}
-      <nav>${Object.entries(VIEWS).map(([key, item]) =>
-        `<button data-view="${key}" class="${key === view ? "active" : ""}">${item.icon} ${escapeHtml(item.label)}</button>`).join("")}</nav>
-      <main><div class="workspace"><div>${body}</div>${view === "manage" ? "" : this._details()}</div></main>
-    </ha-card>`;
+  async _selectPlate(plate) {
+    this._selectedPlate = plate;
+    const selector = this._entity("selected_plate");
+    if (selector) await this._hass.callService("select", "select_option", { entity_id: selector.entity_id, option: plate });
+    this._mobileTab = "details";
+    this._message = "";
+    this._render();
+  }
 
-    this.shadowRoot.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => {
-      this._activeView = button.dataset.view;
-      this._render();
-    }));
-    this.shadowRoot.querySelectorAll("[data-plate]").forEach((button) => button.addEventListener("click", async () => {
-      this._selectedPlate = button.dataset.plate;
-      const selector = this._entity("selected_plate");
-      if (selector) {
-        await this._hass.callService("select", "select_option", {
-          entity_id: selector.entity_id,
-          option: this._selectedPlate,
-        });
-      }
-      this._render();
-    }));
-    this.shadowRoot.querySelectorAll("[data-edit-plate],[data-edit-known]").forEach((button) => button.addEventListener("click", () => {
-      this._startEditing(button.dataset.editPlate || button.dataset.editKnown);
-    }));
-    this.shadowRoot.querySelector("[data-new-case]")?.addEventListener("click", () => {
-      this._draft = null;
-      this._saveMessage = "";
+  _bind() {
+    this.shadowRoot.querySelectorAll("[data-plate]").forEach((button) => button.addEventListener("click", () => this._selectPlate(button.dataset.plate)));
+    this.shadowRoot.querySelectorAll("[data-mobile-tab]").forEach((button) => button.addEventListener("click", () => { this._mobileTab = button.dataset.mobileTab; this._render(); }));
+    this.shadowRoot.getElementById("vehicle-search")?.addEventListener("input", (event) => {
+      this._search = event.target.value;
+      clearTimeout(this._searchTimer);
+      this._searchTimer = setTimeout(() => {
+        this._render();
+        const input = this.shadowRoot.getElementById("vehicle-search");
+        input?.focus();
+        input?.setSelectionRange(input.value.length, input.value.length);
+      }, 180);
+    });
+    this.shadowRoot.getElementById("category-filter")?.addEventListener("change", (event) => { this._filter = event.target.value; this._render(); });
+    this.shadowRoot.getElementById("vehicle-sort")?.addEventListener("change", (event) => { this._sort = event.target.value; this._render(); });
+    this.shadowRoot.querySelector(".new-case")?.addEventListener("click", () => this._openEditor(null));
+    this.shadowRoot.querySelector(".edit-full")?.addEventListener("click", () => this._openEditor(this._selected()));
+    this.shadowRoot.getElementById("detail-form")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const item = this._selected();
+      const category = new FormData(event.target).get("category");
+      try {
+        await this._hass.callService("frigate_lpr", "set_plate", { plate: item.plate, name: item.name || "", category, notes: this.shadowRoot.getElementById("detail-notes").value });
+        this._message = "Ændringerne er gemt lokalt på sagen.";
+      } catch (_error) { this._message = "Ændringerne kunne ikke gemmes."; }
       this._render();
     });
-    this.shadowRoot.querySelectorAll("[data-draft]").forEach((input) => input.addEventListener("input", () => {
-      this._draft = { ...(this._draft || {}), [input.dataset.draft]: input.value };
-    }));
-    this.shadowRoot.getElementById("case-form")?.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const draft = this._draft || {};
-      if (!draft.plate?.trim() || !draft.name?.trim()) {
-        this._saveMessage = "Nummerplade og navn skal udfyldes.";
-        this._render();
-        return;
-      }
-      const data = {
-        plate: draft.plate, name: draft.name, category: draft.category || "known",
-        notes: draft.notes || "", make: draft.make || "", model: draft.model || "",
-        variant: draft.variant || "", model_type: draft.model_type || "", color: draft.color || "",
-        chassis_type: draft.chassis_type || "", fuel_type: draft.fuel_type || "",
-        vehicle_type: draft.vehicle_type || "",
-      };
-      if (draft.model_year) data.model_year = Number(draft.model_year);
+    this.shadowRoot.querySelector(".api-lookup")?.addEventListener("click", async () => {
+      const item = this._selected();
+      this._message = "Henter stamdata…"; this._render();
       try {
-        await this._hass.callService("frigate_lpr", "set_plate", data);
-        this._saveMessage = "Køretøjssagen er gemt.";
-        this._selectedPlate = String(draft.plate).toUpperCase().replace(/[^A-Z0-9]/g, "");
-      } catch (_error) {
-        this._saveMessage = "Kunne ikke gemme. Kontrollér felterne og prøv igen.";
-      }
+        await this._hass.callService("frigate_lpr", "lookup_vehicle", { plate: item.plate });
+        this._message = "Stamdata er hentet og gemt lokalt på sagen.";
+      } catch (_error) { this._message = "Opslaget mislykkedes. Kontrollér MotorAPI-indstillingerne."; }
       this._render();
+    });
+  }
+
+  _openEditor(item) {
+    const vehicle = item?.vehicle || {};
+    const values = { plate: item?.plate || "", name: item?.name || "", category: categoryKey(item), notes: item?.notes || "", make: vehicle.make || "", model: vehicle.model || "", variant: vehicle.variant || "", model_type: vehicle.model_type || "", model_year: vehicle.model_year || "", color: vehicle.color || "", chassis_type: vehicle.chassis_type || "", fuel_type: vehicle.fuel_type || "", vehicle_type: vehicle.type || "" };
+    const field = (key, label, type = "text") => `<label><span>${label}</span><input name="${key}" type="${type}" value="${escapeHtml(values[key])}"></label>`;
+    const dialog = document.createElement("dialog");
+    dialog.className = "case-dialog";
+    dialog.innerHTML = `<form method="dialog" id="case-editor"><div class="dialog-head"><div><small>KØRETØJSSAG</small><h2>${item ? `Rediger ${escapeHtml(item.plate)}` : "Nyt køretøj"}</h2></div><button value="cancel" class="icon-button"><ha-icon icon="mdi:close"></ha-icon></button></div><div class="editor-grid">${field("plate", "Nummerplade")}${field("name", "Navn / relation")}<label><span>Kategori</span><select name="category">${Object.entries(CATEGORY).map(([key, value]) => `<option value="${key}" ${values.category === key ? "selected" : ""}>${value.label}</option>`).join("")}</select></label>${field("make", "Mærke")}${field("model", "Model")}${field("variant", "Variant")}${field("model_type", "Modeltype")}${field("model_year", "Årgang", "number")}${field("color", "Farve")}${field("chassis_type", "Karrosseri")}${field("fuel_type", "Drivmiddel")}${field("vehicle_type", "Køretøjstype")}<label class="wide"><span>Bemærkning</span><textarea name="notes" rows="3">${escapeHtml(values.notes)}</textarea></label></div><div class="dialog-actions"><button value="cancel">Annuller</button><button value="save" class="primary">Gem køretøjssag</button></div></form>`;
+    this.shadowRoot.append(dialog); dialog.showModal();
+    dialog.addEventListener("close", async () => {
+      if (dialog.returnValue === "save") {
+        const data = Object.fromEntries(new FormData(dialog.querySelector("form")).entries());
+        if (!data.plate.trim()) { dialog.remove(); this._message = "Nummerpladen skal udfyldes."; this._render(); return; }
+        if (data.model_year) data.model_year = Number(data.model_year); else delete data.model_year;
+        try { await this._hass.callService("frigate_lpr", "set_plate", data); this._selectedPlate = data.plate.toUpperCase().replace(/[^A-Z0-9]/g, ""); this._message = "Køretøjssagen er gemt."; }
+        catch (_error) { this._message = "Køretøjssagen kunne ikke gemmes."; }
+      }
+      dialog.remove(); this._render();
     });
   }
 
   static styles = `
-    :host{display:block;--muted:var(--secondary-text-color);font-family:var(--paper-font-body1_-_font-family,Arial,sans-serif)}
-    ha-card{overflow:hidden;background:var(--ha-card-background,var(--card-background-color));color:var(--primary-text-color)}
-    header{display:flex;align-items:center;justify-content:space-between;padding:22px 22px 14px;background:linear-gradient(135deg,rgba(35,115,170,.15),transparent 62%)}
-    header h1{font-size:24px;line-height:1.15;margin:4px 0 0} header>ha-icon{--mdc-icon-size:36px;color:var(--primary-color)}
-    .eyebrow{font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--primary-color)}
-    .summary{display:grid;grid-template-columns:repeat(3,1fr);margin:0 18px 16px;border:1px solid var(--divider-color);border-radius:14px;overflow:hidden}
-    .summary div{padding:14px 10px;text-align:center}.summary div+div{border-left:1px solid var(--divider-color)}
-    .summary strong{display:block;font-size:24px}.summary span{display:block;color:var(--muted);font-size:11px;margin-top:3px}
-    nav{display:flex;gap:7px;overflow-x:auto;padding:0 18px 14px;scrollbar-width:none}nav::-webkit-scrollbar{display:none}
-    nav button,.section-title button{border:0;border-radius:99px;padding:8px 12px;white-space:nowrap;background:var(--secondary-background-color);color:var(--primary-text-color);cursor:pointer}
-    nav button.active{background:var(--primary-color);color:var(--text-primary-color,#fff)}
-    main{padding:0 18px 20px}section{margin-top:5px}.section-title{display:flex;justify-content:space-between;align-items:center;font-weight:700;margin:12px 2px 8px}
-    .section-title button{padding:6px 10px;color:var(--primary-color);background:transparent}
-    .workspace{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:18px;align-items:start}
-    .category-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:9px;margin:2px 0 18px}
-    .category{display:flex;align-items:center;gap:10px;border:1px solid color-mix(in srgb,var(--accent) 30%,var(--divider-color));background:var(--tint);color:var(--primary-text-color);border-radius:14px;padding:13px;text-align:left;cursor:pointer}
-    .category-icon{display:grid;place-items:center;color:var(--accent);background:var(--ha-card-background);border-radius:10px;width:38px;height:38px}
-    .category strong,.category small{display:block}.category small{color:var(--muted);margin-top:3px}
-    .plate-row{width:100%;display:flex;align-items:center;gap:11px;padding:12px 4px;border:0;border-bottom:1px solid var(--divider-color);background:transparent;color:var(--primary-text-color);text-align:left;cursor:pointer}
-    .plate-row:last-child{border-bottom:0}.dot{width:9px;height:9px;border-radius:50%;background:var(--dot);box-shadow:0 0 0 4px color-mix(in srgb,var(--dot) 15%,transparent)}
-    .plate-main{flex:1;min-width:0}.plate-main strong{font-size:16px;letter-spacing:.04em}.plate-main small{display:block;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
-    .plate-row ha-icon{color:var(--muted)}.empty{padding:24px;text-align:center;color:var(--muted)}
-    .details{margin-top:20px;padding:17px;border:1px solid color-mix(in srgb,var(--accent) 30%,var(--divider-color));border-radius:16px;background:linear-gradient(145deg,var(--tint),transparent 55%)}
-    .detail-head{display:flex;justify-content:space-between}.detail-head h2{font-size:28px;margin:8px 0 2px;letter-spacing:.05em}.detail-head p{margin:0;color:var(--muted)}.detail-head>ha-icon{--mdc-icon-size:38px;color:var(--accent)}
-    .badge{display:inline-block;padding:4px 8px;border-radius:99px;background:var(--tint);color:var(--accent);font-size:11px;font-weight:800}
-    .detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:16px 0}.detail-grid span{padding:10px;background:var(--ha-card-background);border-radius:10px}.detail-grid small,.detail-grid strong{display:block}.detail-grid small{color:var(--muted);font-size:10px}.detail-grid strong{font-size:17px;margin-top:3px}
-    .vehicle{display:flex;align-items:center;gap:10px;padding:12px;margin:0 0 9px;background:var(--ha-card-background);border-radius:10px}.vehicle ha-icon{color:var(--accent)}.vehicle strong,.vehicle small{display:block}.vehicle small{color:var(--muted);margin-top:3px}
-    .notes{padding:12px;margin:0 0 9px;background:var(--ha-card-background);border-radius:10px}.notes p{margin:6px 0 0;white-space:pre-wrap}.edit-case,.save-case{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;border:0;border-radius:10px;padding:11px;margin-top:13px;background:var(--primary-color);color:var(--text-primary-color,#fff);font-weight:700;cursor:pointer}
-    .manage-panel{margin-top:0}.privacy-note{display:flex;align-items:center;gap:8px;padding:10px;border-radius:10px;background:rgba(46,157,88,.12);color:var(--primary-text-color)}.privacy-note ha-icon{color:#2e9d58}.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:11px}.form-grid label{display:grid;gap:5px}.form-grid label>span{font-size:12px;color:var(--muted)}.form-grid input,.form-grid select,.form-grid textarea{box-sizing:border-box;width:100%;font:inherit;color:var(--primary-text-color);background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:8px;padding:10px}.form-grid .wide{grid-column:1/-1}.save-message{display:block;text-align:center;margin-top:9px;color:var(--muted)}.known-cases{display:grid;gap:7px;margin-top:22px}.known-cases>strong{margin-bottom:3px}.known-cases button{display:flex;justify-content:space-between;gap:10px;border:1px solid var(--divider-color);border-radius:9px;padding:10px;background:var(--secondary-background-color);color:var(--primary-text-color);cursor:pointer}.known-cases button span{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    dl{margin:0}dl div{display:flex;justify-content:space-between;gap:10px;padding:7px 0}dt{color:var(--muted)}dd{margin:0;text-align:right}.history{border-top:1px solid var(--divider-color);margin-top:10px;padding-top:12px}.history>div{display:flex;justify-content:space-between;gap:10px;padding-top:7px}.history small{color:var(--muted);text-align:right}
-    @media(max-width:420px){header{padding:18px 16px 12px}main{padding:0 13px 16px}.summary,nav{margin-left:13px;margin-right:13px;padding-left:0;padding-right:0}.detail-grid{grid-template-columns:1fr}.summary strong{font-size:20px}}
+    :host{display:block;container-type:inline-size;--muted:var(--secondary-text-color);--surface:var(--ha-card-background,var(--card-background-color));font-family:var(--paper-font-body1_-_font-family,Arial,sans-serif)}*{box-sizing:border-box}ha-card{overflow:hidden;background:var(--surface);color:var(--primary-text-color);border-radius:var(--ha-card-border-radius,14px)}
+    header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 22px;border-bottom:1px solid var(--divider-color)}header small,.panel-title small,.detail-top small,.dialog-head small{font-size:10px;font-weight:800;letter-spacing:.13em;color:var(--muted)}h1,h2,p{margin:0}h1{font-size:23px;margin-top:3px}h2{font-size:17px}.headline-stats{display:flex;gap:10px}.headline-stats span{padding:8px 11px;border-radius:9px;background:var(--secondary-background-color);font-size:12px}.headline-stats strong{font-size:16px;margin-right:3px}
+    main{display:grid;grid-template-columns:minmax(260px,.9fr) minmax(390px,1.5fr) minmax(250px,.85fr);min-height:650px}.panel{min-width:0;padding:18px}.panel+.panel{border-left:1px solid var(--divider-color)}.panel-title,.detail-top,.identity,.dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.icon-button{display:grid;place-items:center;width:40px;height:40px;padding:0;border:1px solid var(--divider-color);border-radius:10px;background:var(--secondary-background-color);color:var(--primary-text-color);cursor:pointer}.icon-button:disabled{opacity:.45;cursor:not-allowed}
+    .search{display:flex;align-items:center;gap:8px;margin:14px 0 9px;padding:0 10px;border:1px solid var(--divider-color);border-radius:10px;background:var(--secondary-background-color)}.search ha-icon{color:var(--muted)}.search input{width:100%;height:42px;border:0;outline:0;background:transparent;color:var(--primary-text-color);font:inherit}.list-controls{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px}select,input,textarea{font:inherit}.list-controls select{min-width:0;padding:8px;border:1px solid var(--divider-color);border-radius:8px;background:var(--surface);color:var(--primary-text-color)}
+    .vehicle-list,.recent-list{display:grid}.vehicle-row,.recent-row{display:flex;align-items:center;gap:10px;width:100%;min-height:66px;padding:10px 7px;border:0;border-bottom:1px solid var(--divider-color);background:transparent;color:var(--primary-text-color);text-align:left;cursor:pointer}.vehicle-row:hover,.recent-row:hover{background:var(--secondary-background-color)}.vehicle-row.selected{margin:2px 0;padding-left:10px;border:1px solid var(--primary-color);border-radius:10px;background:color-mix(in srgb,var(--primary-color) 8%,transparent)}.mini-plate{flex:0 0 auto;padding:5px 7px;border:1px solid #777;border-radius:4px;background:#f7f7f3;color:#111;font-size:11px;font-weight:800;letter-spacing:.05em}.vehicle-copy{min-width:0;flex:1}.vehicle-copy strong,.vehicle-copy small,.row-meta small,.recent-row span strong,.recent-row span small{display:block}.vehicle-copy strong,.vehicle-copy small,.recent-row span small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vehicle-copy small,.row-meta small,.recent-row span small{margin-top:4px;color:var(--muted);font-size:11px}.row-meta{text-align:right}.badge{display:inline-flex;align-items:center;gap:4px;padding:4px 7px;border-radius:99px;background:color-mix(in srgb,var(--category) 14%,transparent);color:var(--category);font-size:10px;font-weight:800;white-space:nowrap}.badge ha-icon{--mdc-icon-size:13px}
+    .detail-panel{overflow:hidden}.license-plate{display:flex;align-items:center;gap:10px;width:max-content;margin-top:8px;padding:8px 14px 8px 8px;border:2px solid #777;border-radius:7px;background:#f8f8f2;color:#111;font-size:24px;font-weight:800;letter-spacing:.09em;box-shadow:inset 0 0 0 2px #fff}.license-plate span{display:grid;place-items:center;align-self:stretch;padding:0 5px;background:#1769aa;color:#fff;font-size:9px;letter-spacing:0}.identity{margin:15px 0}.identity p{margin-top:4px;color:var(--muted);font-size:12px}.category-editor{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.category-editor input{position:absolute;opacity:0;pointer-events:none}.category-editor span{display:flex;align-items:center;justify-content:center;gap:4px;min-height:42px;padding:7px;border:1px solid var(--divider-color);border-radius:9px;color:var(--muted);font-size:11px;cursor:pointer}.category-editor ha-icon{--mdc-icon-size:15px}.category-editor input:checked+span{border-color:var(--category);background:color-mix(in srgb,var(--category) 13%,transparent);color:var(--category);font-weight:800}.notes-editor{display:grid;gap:5px;margin-top:11px}.notes-editor>span,.editor-grid label>span{font-size:11px;color:var(--muted)}.notes-editor textarea,.editor-grid input,.editor-grid select,.editor-grid textarea{width:100%;padding:10px;border:1px solid var(--divider-color);border-radius:9px;background:var(--surface);color:var(--primary-text-color);resize:vertical}.detail-actions,.dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:9px}.detail-actions button,.dialog-actions button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:40px;padding:7px 11px;border:1px solid var(--divider-color);border-radius:9px;background:var(--secondary-background-color);color:var(--primary-text-color);cursor:pointer}.detail-actions .primary,.dialog-actions .primary{border-color:var(--primary-color);background:var(--primary-color);color:var(--text-primary-color,#fff)}.message{margin-top:8px;color:var(--primary-color);font-size:12px;text-align:right}
+    .facts{display:grid;grid-template-columns:repeat(3,1fr);margin:16px 0;border:1px solid var(--divider-color);border-radius:11px;overflow:hidden}.facts span{min-width:0;padding:10px;border-right:1px solid var(--divider-color);border-bottom:1px solid var(--divider-color)}.facts span:nth-child(3n){border-right:0}.facts span:nth-last-child(-n+3){border-bottom:0}.facts small,.facts strong,.stat small,.stat strong,.time-range small,.time-range strong,.insight small,.insight strong{display:block}.facts small,.stat small,.time-range small,.insight small{color:var(--muted);font-size:10px}.facts strong{margin-top:4px;overflow-wrap:anywhere;font-size:12px}.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.stat{padding:10px;border-radius:9px;background:var(--secondary-background-color)}.stat strong{margin-top:5px;font-size:17px}.time-range{display:flex;align-items:center;justify-content:center;gap:18px;margin:11px 0;padding:9px;border:1px solid var(--divider-color);border-radius:9px;text-align:center}.time-range ha-icon{color:var(--muted)}
+    .charts{display:grid;grid-template-columns:1.5fr 1fr;gap:8px}.chart{min-width:0;padding:10px;border:1px solid var(--divider-color);border-radius:10px}.chart-title{display:flex;justify-content:space-between;gap:8px;font-size:11px}.chart-title span{color:var(--muted)}.chart svg{display:block;width:100%;height:auto;margin-top:5px}.chart text{fill:var(--muted);font-size:8px}.chart-bar{fill:var(--primary-color)}.axis{stroke:var(--divider-color)}.day-bars{display:flex;align-items:end;justify-content:space-around;height:68px;margin-top:8px}.day-bars div{display:grid;align-items:end;justify-items:center;height:100%;width:12%}.day-bars span{display:block;width:9px;min-height:1px;border-radius:3px 3px 0 0;background:var(--primary-color)}.day-bars small{margin-top:3px;color:var(--muted);font-size:9px}.insight{display:flex;align-items:center;gap:9px;margin:10px 0;padding:11px;border-radius:10px;background:color-mix(in srgb,var(--primary-color) 9%,var(--secondary-background-color))}.insight ha-icon{color:var(--primary-color)}.insight strong{margin-top:3px;font-size:12px}.master-data{padding:10px;border:1px solid var(--divider-color);border-radius:10px}.master-data summary{cursor:pointer;font-size:12px;font-weight:700}.master-data dl{margin:8px 0 0}.master-data dl div{display:grid;grid-template-columns:1fr 1.5fr;gap:9px;padding:5px 0;border-top:1px solid var(--divider-color);font-size:11px}.master-data dt{text-transform:capitalize;color:var(--muted)}.master-data dd{margin:0;overflow-wrap:anywhere;text-align:right}
+    .recent-panel{background:color-mix(in srgb,var(--secondary-background-color) 55%,var(--surface))}.recent-panel>.panel-title>ha-icon{color:var(--muted)}.recent-list{margin-top:10px}.recent-row time{width:42px;font-weight:800;font-variant-numeric:tabular-nums}.recent-row>span{min-width:0;flex:1}.recent-row>span strong{font-size:13px;letter-spacing:.04em}.recent-row .badge{max-width:72px}.empty{padding:30px 12px;text-align:center;color:var(--muted)}.mobile-nav{display:none}
+    dialog.case-dialog{width:min(680px,calc(100% - 28px));max-height:calc(100% - 28px);padding:0;border:1px solid var(--divider-color);border-radius:14px;background:var(--surface);color:var(--primary-text-color);box-shadow:0 18px 55px rgba(0,0,0,.35)}dialog::backdrop{background:rgba(0,0,0,.45)}.case-dialog form{padding:18px}.editor-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}.editor-grid label{display:grid;gap:5px}.editor-grid .wide{grid-column:1/-1}
+    @container (max-width: 900px){main{grid-template-columns:minmax(235px,.8fr) minmax(390px,1.2fr)}.recent-panel{grid-column:1/-1;border-left:0!important;border-top:1px solid var(--divider-color)}.recent-list{grid-template-columns:repeat(2,1fr);gap:0 12px}}
+    @container (max-width: 620px){header{padding:16px}.headline-stats{gap:5px}.headline-stats span{padding:6px 7px;font-size:10px}.headline-stats strong{font-size:13px}.mobile-nav{display:grid;grid-template-columns:repeat(3,1fr);padding:6px;border-bottom:1px solid var(--divider-color)}.mobile-nav button{display:flex;align-items:center;justify-content:center;gap:5px;min-height:46px;border:0;border-radius:9px;background:transparent;color:var(--muted)}.mobile-nav button.active{background:var(--secondary-background-color);color:var(--primary-color);font-weight:800}.mobile-nav ha-icon{--mdc-icon-size:18px}main{display:block;min-height:0}main>.panel{display:none;border:0;padding:14px}main[data-mobile-active=recent]>.recent-panel,main[data-mobile-active=vehicles]>.vehicle-panel,main[data-mobile-active=details]>.detail-panel{display:block}.recent-list{grid-template-columns:1fr}.vehicle-row,.recent-row{min-height:70px}.category-editor{grid-template-columns:repeat(2,1fr)}.facts{grid-template-columns:repeat(2,1fr)}.facts span,.facts span:nth-child(3n){border-right:1px solid var(--divider-color);border-bottom:1px solid var(--divider-color)}.facts span:nth-child(2n){border-right:0}.facts span:nth-last-child(-n+2){border-bottom:0}.charts{grid-template-columns:1fr}.stats-grid{grid-template-columns:repeat(2,1fr)}.detail-actions{display:grid;grid-template-columns:1fr 1fr}.editor-grid{grid-template-columns:1fr}.license-plate{font-size:21px}.dialog-actions{position:sticky;bottom:0;padding-top:8px;background:var(--surface)}}
+    @container (max-width: 390px){header{align-items:flex-start}.headline-stats{display:grid}.list-controls{grid-template-columns:1fr}.row-meta .badge{padding:4px}.category-editor span{font-size:10px}.stats-grid{grid-template-columns:1fr 1fr}.detail-actions{grid-template-columns:1fr}}
   `;
 }
 
 class FrigateLprCardEditor extends HTMLElement {
-  constructor() {
-    super();
-    this.attachShadow({ mode: "open" });
-  }
-
-  set hass(hass) {
-    this._hass = hass;
-  }
-
-  setConfig(config) {
-    this._config = { ...FrigateLprCard.getStubConfig(), ...config };
-    this._render();
-  }
-
-  _changed(patch) {
-    this._config = { ...this._config, ...patch };
-    this.dispatchEvent(new CustomEvent("config-changed", {
-      detail: { config: this._config }, bubbles: true, composed: true,
-    }));
-  }
-
+  constructor() { super(); this.attachShadow({ mode: "open" }); }
+  set hass(hass) { this._hass = hass; }
+  setConfig(config) { this._config = { ...FrigateLprCard.getStubConfig(), ...config }; this._render(); }
+  _changed(patch) { this._config = { ...this._config, ...patch }; this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true })); }
   _render() {
     if (!this._config) return;
-    this.shadowRoot.innerHTML = `<style>
-      .form{display:grid;gap:18px;padding:8px 0}.field{display:grid;gap:7px}.field>span{font-weight:500}
-      input,select{box-sizing:border-box;width:100%;font:inherit;color:var(--primary-text-color);background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:8px;padding:12px}
-      label.toggle{display:flex;align-items:center;gap:10px;cursor:pointer}input[type=checkbox]{width:18px;height:18px}
-      small{color:var(--secondary-text-color)}
-    </style><div class="form">
-      <label class="field"><span>Titel</span><input id="title" value="${escapeHtml(this._config.title)}"></label>
-      <label class="field"><span>Startvisning</span><select id="default_view">${Object.entries(VIEWS).map(([key,item]) => `<option value="${key}" ${this._config.default_view === key ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}</select></label>
-      <label class="field"><span>Maksimalt antal plader</span><input id="max_items" type="number" min="1" max="50" value="${Number(this._config.max_items) || 10}"><small>Gælder for hver liste i kortet.</small></label>
-      <label class="toggle"><input id="show_summary" type="checkbox" ${this._config.show_summary ? "checked" : ""}><span>Vis nøgletal</span></label>
-      <label class="toggle"><input id="show_details" type="checkbox" ${this._config.show_details ? "checked" : ""}><span>Vis detaljer og historik ved klik</span></label>
-    </div>`;
+    this.shadowRoot.innerHTML = `<style>.form{display:grid;gap:18px;padding:8px 0}.field{display:grid;gap:7px}.field>span{font-weight:500}input{box-sizing:border-box;width:100%;font:inherit;color:var(--primary-text-color);background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:8px;padding:12px}label.toggle{display:flex;align-items:center;gap:10px;cursor:pointer}input[type=checkbox]{width:18px;height:18px}small{color:var(--secondary-text-color)}</style><div class="form"><label class="field"><span>Titel</span><input id="title" value="${escapeHtml(this._config.title)}"></label><label class="field"><span>Maksimalt antal køretøjer</span><input id="max_items" type="number" min="1" max="200" value="${Number(this._config.max_items) || 50}"><small>Listen kan fortsat søges og filtreres.</small></label><label class="toggle"><input id="show_summary" type="checkbox" ${this._config.show_summary ? "checked" : ""}><span>Vis dagens nøgletal</span></label><label class="toggle"><input id="show_details" type="checkbox" ${this._config.show_details ? "checked" : ""}><span>Vis detalje- og statistikvisning</span></label></div>`;
     this.shadowRoot.getElementById("title").addEventListener("input", (event) => this._changed({ title: event.target.value }));
-    this.shadowRoot.getElementById("default_view").addEventListener("change", (event) => this._changed({ default_view: event.target.value }));
-    this.shadowRoot.getElementById("max_items").addEventListener("change", (event) => this._changed({ max_items: Math.max(1, Math.min(50, Number(event.target.value) || 10)) }));
+    this.shadowRoot.getElementById("max_items").addEventListener("change", (event) => this._changed({ max_items: Math.max(1, Math.min(200, Number(event.target.value) || 50)) }));
     this.shadowRoot.getElementById("show_summary").addEventListener("change", (event) => this._changed({ show_summary: event.target.checked }));
     this.shadowRoot.getElementById("show_details").addEventListener("change", (event) => this._changed({ show_details: event.target.checked }));
   }
@@ -402,15 +284,5 @@ class FrigateLprCardEditor extends HTMLElement {
 
 if (!customElements.get(CARD_NAME)) customElements.define(CARD_NAME, FrigateLprCard);
 if (!customElements.get("frigate-lpr-card-editor")) customElements.define("frigate-lpr-card-editor", FrigateLprCardEditor);
-
 window.customCards = window.customCards || [];
-if (!window.customCards.some((card) => card.type === CARD_NAME)) {
-  window.customCards.push({
-    type: CARD_NAME,
-    name: "Frigate LPR Registry",
-    description: "Skalerbart køretøjsregister til fx private parkeringsarealer og boligforeninger.",
-    preview: true,
-    configurable: true,
-    documentationURL: "https://github.com/msamsing/frigate-lpr-ha#dashboard",
-  });
-}
+if (!window.customCards.some((card) => card.type === CARD_NAME)) window.customCards.push({ type: CARD_NAME, name: "Frigate LPR Registry", description: "Responsivt køretøjsregister til private parkeringsarealer og boligforeninger.", preview: true, configurable: true, documentationURL: "https://github.com/msamsing/frigate-lpr-ha#dashboard" });

@@ -14,6 +14,7 @@ from homeassistant.components.lovelace.resources import ResourceStorageCollectio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
@@ -31,6 +32,7 @@ from .const import (
     DOMAIN,
     PLATFORMS,
     SERVICE_REMOVE_PLATE_METADATA,
+    SERVICE_LOOKUP_VEHICLE,
     SERVICE_SET_PLATE,
     STATIC_URL_PATH,
 )
@@ -46,7 +48,7 @@ SET_PLATE_SCHEMA = vol.Schema(
     {
         vol.Required("plate"): cv.string,
         vol.Required(CONF_NAME): cv.string,
-        vol.Required("category"): vol.In(["own", "known"]),
+        vol.Required("category"): vol.In(["own", "known", "unknown", "unwanted"]),
         vol.Optional("notes"): cv.string,
         vol.Optional("make"): cv.string,
         vol.Optional("model"): cv.string,
@@ -106,8 +108,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -
     async def remove_metadata(call: ServiceCall) -> None:
         await manager.async_remove_metadata(call.data["plate"])
 
+    async def lookup_vehicle(call: ServiceCall) -> None:
+        try:
+            await manager.async_lookup_vehicle_manual(call.data["plate"])
+        except ValueError as err:
+            raise HomeAssistantError(str(err)) from err
+
     hass.services.async_register(DOMAIN, SERVICE_SET_PLATE, set_plate, schema=SET_PLATE_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_REMOVE_PLATE_METADATA, remove_metadata, schema=REMOVE_SCHEMA)
+    hass.services.async_register(DOMAIN, SERVICE_LOOKUP_VEHICLE, lookup_vehicle, schema=REMOVE_SCHEMA)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     return True
@@ -119,6 +128,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) 
         await entry.runtime_data.async_unload()
         hass.services.async_remove(DOMAIN, SERVICE_SET_PLATE)
         hass.services.async_remove(DOMAIN, SERVICE_REMOVE_PLATE_METADATA)
+        hass.services.async_remove(DOMAIN, SERVICE_LOOKUP_VEHICLE)
         frontend.remove_extra_js_url(hass, CARD_URL)
     return unloaded
 

@@ -140,6 +140,7 @@ class LPRPlateSensor(LPRBaseSensor):
             "different_days": view["different_days"],
             "intervals_seconds": view["intervals_seconds"][-50:],
             "average_interval_hours": view["average_interval_hours"],
+            "time_stats": view["time_stats"],
             "observations": view["observations"][-50:],
             "shown_observations": min(50, view["count"]),
             "stored_observations": view["count"],

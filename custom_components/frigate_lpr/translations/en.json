@@ -58,7 +58,7 @@
       },
       "vehicle_lookup": {
         "title": "Vehicle lookup via MotorAPI",
-        "description": "Optional lookup of make and model. Only the first observation of a brand-new unknown plate is sent to MotorAPI. Plates named as Own or Known local are never sent. The result is stored so the plate is not looked up again.",
+        "description": "Optional lookup of make and model. Only the first observation of a brand-new unknown plate is sent to MotorAPI. Named plates and the Own, Known local and Unwanted categories are never sent automatically. The result is stored so the plate is not looked up again.",
         "data": {
           "motorapi_enabled": "Enable lookup for new unknown plates",
           "motorapi_key": "MotorAPI key"

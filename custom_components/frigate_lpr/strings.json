@@ -53,7 +53,7 @@
       },
       "vehicle_lookup": {
         "title": "Køretøjsopslag via MotorAPI",
-        "description": "Valgfrit opslag af mærke og model. Kun første observation af en ny, ukendt plade sendes til MotorAPI. Plader navngivet som Egen eller Kendt lokal sendes aldrig. Resultatet gemmes, så pladen ikke slås op igen.",
+        "description": "Valgfrit opslag af mærke og model. Kun første observation af en ny, ukendt plade sendes til MotorAPI. Navngivne plader og kategorierne Egen, Kendt lokal og Uønsket sendes aldrig automatisk. Resultatet gemmes, så pladen ikke slås op igen.",
         "data": {
           "motorapi_enabled": "Aktivér opslag for nye ukendte plader",
           "motorapi_key": "MotorAPI-nøgle"

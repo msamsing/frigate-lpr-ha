@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+import math
 import re
 from typing import Any
 
@@ -59,11 +60,13 @@ class LPRRegistry:
         if notes is not None:
             record["notes"] = notes.strip()
         if vehicle is not None:
-            record["vehicle"] = {
-                field: value.strip() if isinstance(value, str) else value
-                for field, value in vehicle.items()
-                if value not in (None, "")
-            } or None
+            merged_vehicle = dict(record.get("vehicle") or {})
+            for field, value in vehicle.items():
+                if value in (None, ""):
+                    merged_vehicle.pop(field, None)
+                else:
+                    merged_vehicle[field] = value.strip() if isinstance(value, str) else value
+            record["vehicle"] = merged_vehicle or None
             record["vehicle_source"] = "manual" if record["vehicle"] else None
         return key
 
@@ -132,7 +135,13 @@ class LPRRegistry:
         """Classify solely from explicit metadata and observable frequency."""
         if record.get("category") == "own":
             return "Egen"
-        if record.get("category") == "known" or record.get("name"):
+        if record.get("category") == "known":
+            return "Kendt lokal"
+        if record.get("category") == "unwanted":
+            return "Uønsket"
+        if record.get("category") == "unknown":
+            return "Ukendt"
+        if record.get("name"):
             return "Kendt lokal"
         if (
             record["count"] >= self.frequent_observations
@@ -151,6 +160,50 @@ class LPRRegistry:
             "classification": self.classification(record),
             "different_days": len(record["days"]),
             "average_interval_hours": round(sum(intervals) / len(intervals) / 3600, 1) if intervals else None,
+            "time_stats": self._time_stats(record["observations"]),
+        }
+
+    @staticmethod
+    def _time_stats(observations: list[dict[str, Any]]) -> dict[str, Any]:
+        """Return compact aggregates used by the dashboard charts."""
+        if not observations:
+            return {
+                "last_7_days": 0,
+                "last_30_days": 0,
+                "typical_minute": None,
+                "spread_minutes": None,
+                "earliest_minute": None,
+                "latest_minute": None,
+                "hour_counts": [0] * 24,
+                "daily_counts": [],
+            }
+        timestamps = [datetime.fromisoformat(item["timestamp"]) for item in observations]
+        now = datetime.now(timestamps[-1].tzinfo or timezone.utc)
+        aware = [stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc) for stamp in timestamps]
+        minutes = [stamp.hour * 60 + stamp.minute for stamp in timestamps]
+        angles = [minute / 1440 * 2 * math.pi for minute in minutes]
+        mean_angle = math.atan2(
+            sum(math.sin(angle) for angle in angles),
+            sum(math.cos(angle) for angle in angles),
+        )
+        typical = round((mean_angle % (2 * math.pi)) / (2 * math.pi) * 1440) % 1440
+        circular_distances = [min(abs(minute - typical), 1440 - abs(minute - typical)) for minute in minutes]
+        hour_counts = [0] * 24
+        for minute in minutes:
+            hour_counts[minute // 60] += 1
+        daily = Counter(stamp.date().isoformat() for stamp in timestamps)
+        return {
+            "last_7_days": sum(stamp >= now - timedelta(days=7) for stamp in aware),
+            "last_30_days": sum(stamp >= now - timedelta(days=30) for stamp in aware),
+            "typical_minute": typical,
+            "spread_minutes": round(sum(circular_distances) / len(circular_distances)),
+            "earliest_minute": min(minutes),
+            "latest_minute": max(minutes),
+            "hour_counts": hour_counts,
+            "daily_counts": [
+                {"date": (now.date() - timedelta(days=offset)).isoformat(), "count": daily.get((now.date() - timedelta(days=offset)).isoformat(), 0)}
+                for offset in range(6, -1, -1)
+            ],
         }
 
     def should_lookup_vehicle(self, plate: str) -> bool:
@@ -160,7 +213,7 @@ class LPRRegistry:
             return False
         return not (
             record.get("name")
-            or record.get("category") in {"own", "known"}
+            or record.get("category") in {"own", "known", "unwanted"}
             or record.get("vehicle_lookup") is not None
         )
 
@@ -220,7 +273,18 @@ class LPRRegistry:
             for plate, record in self.plates.items()
             if record["count"] == 1
         ]
-        classified = {name: [] for name in ("Egen", "Kendt lokal", "Hyppig", "Sjælden", "Engangsbesøgende")}
+        classified = {
+            name: []
+            for name in (
+                "Egen",
+                "Kendt lokal",
+                "Uønsket",
+                "Ukendt",
+                "Hyppig",
+                "Sjælden",
+                "Engangsbesøgende",
+            )
+        }
         for plate, record in self.plates.items():
             classification = self.classification(record)
             classified[classification].append(
@@ -241,7 +305,13 @@ class LPRRegistry:
             "unique_today": len(plates_today),
             "observations_today": all_today_count,
             "recent": [
-                {**item, "vehicle": self.plates.get(item["plate"], {}).get("vehicle")}
+                {
+                    **item,
+                    "vehicle": self.plates.get(item["plate"], {}).get("vehicle"),
+                    "name": self.plates.get(item["plate"], {}).get("name", ""),
+                    "category": self.plates.get(item["plate"], {}).get("category", ""),
+                    "classification": self.classification(self.plates[item["plate"]]),
+                }
                 for item in self.data["recent"][:20]
             ],
             "frequent": frequent,

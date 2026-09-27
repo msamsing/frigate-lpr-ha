@@ -19,11 +19,11 @@ observationshistorikken.
 - Første/seneste observation, samlet antal, antal forskellige dage, alle observationer og intervaller i sekunder.
 - Dagstællere, seneste observationer, hyppigste, kendte og engangsbesøgende.
 - Dynamisk sensor for hver plade; klik på sensoren viser statistik og de 50 seneste observationer/intervaller.
-- Navngivning og kategori gennem integrationens UI eller handlingen `frigate_lpr.set_plate`.
+- Navngivning og kategorierne Egen, Kendt, Ukendt og Uønsket gennem kortet eller handlingen `frigate_lpr.set_plate`.
 - Egne og andre kendte plader kan oprettes efter installationen.
 - Medfølgende Lovelace-kort, som kan vælges og konfigureres direkte i dashboard-editoren.
 - Valgfrit MotorAPI-opslag af mærke, model og andre grunddata for helt nye, ukendte plader.
-- Plader, som brugeren har navngivet eller markeret som Egen/Kendt lokal, sendes aldrig til MotorAPI.
+- Plader, som brugeren har navngivet eller markeret som Egen, Kendt eller Uønsket, sendes aldrig automatisk til MotorAPI.
 
 ## Klassifikation
 
@@ -32,7 +32,9 @@ Klassifikationen gætter aldrig på ejerskab. Reglerne evalueres i denne rækkef
 | Klasse | Transparent regel |
 |---|---|
 | Egen | Brugeren har sat kategori `own` |
-| Kendt lokal | Brugeren har sat kategori `known` eller et navn |
+| Kendt lokal | Brugeren har sat kategori `known` eller har navngivet en plade uden en anden udtrykkelig kategori |
+| Ukendt | Brugeren har sat den neutrale kategori `unknown` |
+| Uønsket | Brugeren har udtrykkeligt sat kategori `unwanted` |
 | Hyppig | Mindst 10 observationer fordelt over mindst 4 forskellige dage |
 | Engangsbesøgende | Præcis 1 observation |
 | Sjælden | Øvrige observerede plader |
@@ -65,18 +67,24 @@ Ingen YAML er nødvendig for selve integrationen.
 
 Under **Indstillinger → Køretøjsopslag via MotorAPI** kan opslag aktiveres med en
 API-nøgle fra [motorapi.dk](https://www.motorapi.dk/). Når en helt ny og ukendt
-nummerplade observeres første gang, hentes og gemmes mærke, model, variant, modelår,
-farve, karrosseri og drivmiddel. Det gemte resultat vises i sensoren og Lovelace-kortet.
+nummerplade observeres første gang, hentes og gemmes køretøjets stamdata lokalt på
+køretøjssagen. De vigtigste felter vises i sensoren og Lovelace-kortet.
 
 Af hensyn til privatliv og API-forbrug gælder følgende:
 
-- En plade, som allerede har et brugerdefineret navn eller kategorien **Egen** eller
-  **Kendt lokal**, sendes aldrig til MotorAPI.
+- En plade, som allerede har et brugerdefineret navn eller kategorien **Egen**,
+  **Kendt lokal** eller **Uønsket**, sendes aldrig automatisk til MotorAPI.
 - Kun plader, der observeres første gang efter funktionen er aktiveret, slås op;
   eksisterende historik sendes ikke bagudrettet.
 - Ethvert opslag markeres persistent som forsøgt, også hvis pladen ikke findes eller
   API'et svarer med en fejl. Senere observationer medfører derfor ikke nye API-kald.
-- Kun køretøjets viste grunddata gemmes. Integrationen gemmer ikke VIN fra API-svaret.
+- Hele datasættet, som MotorAPIs køretøjs-endpoint returnerer, gemmes persistent lokalt
+  i Home Assistant på sagen. Det kan derfor også indeholde VIN/stelnummer og andre
+  oplysninger, som ikke vises direkte i kortets kompakte oversigt.
+- På en gemt sag findes knappen **Hent stamdata fra MotorAPI**. Den er kun aktiv, når
+  API'et er konfigureret. Knappen er et udtrykkeligt manuelt opslag og kan derfor også
+  bruges på en sag markeret **Egen** eller **Kendt lokal**; pladen sendes kun, når
+  brugeren selv trykker på knappen.
 
 Hvis en plade skal beskyttes mod opslag, skal den oprettes som **Egen** eller **Kendt
 lokal**, før den observeres første gang. Når en ukendt plade først er sendt til API'et,
@@ -94,20 +102,22 @@ Sådan bruges kortet:
 
 1. Åbn det dashboard, hvor overblikket skal vises, og vælg **Rediger dashboard**.
 2. Vælg **Tilføj kort** og søg efter **Frigate LPR Registry**.
-3. Konfigurer titel, startvisning, antal viste plader, nøgletal og detaljevisning i
+3. Konfigurer titel, antal viste plader, nøgletal og detaljevisning i
    den grafiske editor, og vælg **Gem**.
 
 Der skal ikke kopieres YAML eller oprettes en Lovelace-resource manuelt. Integrationen
 registrerer selv kortets modul i Home Assistants Lovelace-resource-lager. Kortet finder
-automatisk integrationens entiteter og opdeler plader grafisk i **Egen**,
-**Kendt lokal**, **Hyppig**, **Sjælden** og **Engangsbesøgende**. Klik på en plade
-for at vise dens historik og observationsfrekvens.
+automatisk integrationens entiteter. På brede kort vises en søgbar og sorterbar
+køretøjsliste, den valgte køretøjssag med statistik og grafer samt en fast kolonne
+med de seneste passager. På telefon bruges fanerne **Seneste**, **Køretøjer** og
+**Detaljer**, så ingen desktop-tabel presses sammen eller kræver vandret rulning.
 
-Kortet er responsivt og tilpasser kolonnerne til den plads, det får i dashboardet.
-Under fanen **Administrer** kan egne og kendte nummerplader oprettes og redigeres
-direkte fra Lovelace. Hver bil får en samlet køretøjssag med navn/relation,
-klassifikation, køretøjsdata, observationsstatistik, historik og korte bemærkninger.
-Oplysningerne gemmes af integrationen i Home Assistants persistente lager.
+Kategori og bemærkning kan ændres direkte i detaljevisningen. Den fulde editor kan
+oprette og redigere køretøjssager med navn/relation og stamdata. Graferne viser
+tidspunkt på døgnet og passager i den seneste uge; mønsterteksten er alene baseret
+på observationerne. Kortets layout reagerer på sin egen bredde via container queries
+og følger Home Assistants aktive lyse eller mørke tema. Oplysningerne gemmes af
+integrationen i Home Assistants persistente lager.
 
 Ved opgradering fra 1.3.1 fjernes det selvstændige **Nummerplader**-dashboard, som
 den version oprettede, automatisk.
@@ -128,8 +138,8 @@ data:
 ```
 
 Brug `category: own` kun for en plade, som brugeren selv har valgt at betegne som
-egen. Handlingen `frigate_lpr.remove_plate_metadata` fjerner navn og kategori, men
-bevarer observationerne.
+egen. De øvrige værdier er `known`, `unknown` og `unwanted`. Handlingen
+`frigate_lpr.remove_plate_metadata` fjerner navn og kategori, men bevarer observationerne.
 
 ## Automatisering
 

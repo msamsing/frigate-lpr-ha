@@ -67,12 +67,18 @@ class LPRPlateSelect(SelectEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        base = {
+            "frigate_lpr_view": "selected_plate",
+            "motorapi_enabled": bool(
+                self.manager.motorapi_enabled and self.manager.motorapi_key
+            ),
+        }
         plate = self.current_option
         if not plate:
-            return {"frigate_lpr_view": "selected_plate"}
+            return base
         view = self.manager.registry.plate_view(plate)
         return {
-            "frigate_lpr_view": "selected_plate",
+            **base,
             "plate": plate,
             "name": view["name"] or view["frigate_name"],
             "user_category": view["category"],
@@ -82,6 +88,7 @@ class LPRPlateSelect(SelectEntity):
             "observations_count": view["count"],
             "different_days": view["different_days"],
             "average_interval_hours": view["average_interval_hours"],
+            "time_stats": view["time_stats"],
             "observations": view["observations"][-20:],
             "vehicle": view.get("vehicle"),
             "vehicle_source": view.get("vehicle_source"),

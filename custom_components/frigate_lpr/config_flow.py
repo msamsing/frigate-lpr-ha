@@ -157,7 +157,9 @@ class FrigateLPROptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Required("plate"): str,
                     vol.Required("name"): str,
-                    vol.Required("category", default="known"): vol.In(["own", "known"]),
+                    vol.Required("category", default="known"): vol.In(
+                        ["own", "known", "unknown", "unwanted"]
+                    ),
                     vol.Optional("notes", default=""): str,
                     vol.Optional("make", default=""): str,
                     vol.Optional("model", default=""): str,

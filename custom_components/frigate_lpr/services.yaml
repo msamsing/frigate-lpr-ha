@@ -24,6 +24,10 @@ set_plate:
               value: own
             - label: Kendt lokal
               value: known
+            - label: Ukendt
+              value: unknown
+            - label: Uønsket
+              value: unwanted
     notes:
       name: Bemærkninger
       selector:
@@ -75,5 +79,15 @@ remove_plate_metadata:
     plate:
       name: Nummerplade
       required: true
+      selector:
+        text:
+lookup_vehicle:
+  name: Hent køretøjsdata fra MotorAPI
+  description: Hent eller opdatér stamdata for en eksisterende lokal køretøjssag. Kræver aktiveret MotorAPI.
+  fields:
+    plate:
+      name: Nummerplade
+      required: true
+      example: AB12345
       selector:
         text:

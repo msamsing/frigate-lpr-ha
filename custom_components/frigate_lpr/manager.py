@@ -143,20 +143,32 @@ class LPRManager:
         await self.store.async_save(self.registry.data)
         async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
 
-    async def _async_lookup_vehicle(self, plate: str) -> None:
+    async def async_lookup_vehicle_manual(self, plate: str) -> None:
+        """Explicitly refresh vehicle data for one locally stored case."""
+        normalized = normalize_plate(plate)
+        if not self.motorapi_enabled or not self.motorapi_key:
+            raise ValueError("MotorAPI is not enabled or the API key is missing")
+        if normalized not in self.registry.plates:
+            raise ValueError("Save the vehicle case before requesting vehicle data")
+        result = await self._async_lookup_vehicle(normalized, manual=True)
+        if result.get("status") != "success":
+            raise ValueError(f"MotorAPI lookup failed: {result.get('status', 'error')}")
+
+    async def _async_lookup_vehicle(self, plate: str, *, manual: bool = False) -> dict[str, Any]:
         """Look up and permanently cache one new, unknown plate."""
         record = self.registry.plates.get(plate, {})
-        if record.get("name") or record.get("category") in {"own", "known"}:
-            self.registry.mark_vehicle_lookup(
-                plate,
-                {
-                    "status": "skipped_private",
-                    "provider": "motorapi",
-                    "attempted_at": dt_util.utcnow().isoformat(),
-                },
-            )
+        if not manual and (
+            record.get("name")
+            or record.get("category") in {"own", "known", "unwanted"}
+        ):
+            result = {
+                "status": "skipped_private",
+                "provider": "motorapi",
+                "attempted_at": dt_util.utcnow().isoformat(),
+            }
+            self.registry.mark_vehicle_lookup(plate, result)
             await self.store.async_save(self.registry.data)
-            return
+            return result
 
         result: dict[str, Any] = {
             "status": "error",
@@ -183,7 +195,8 @@ class LPRManager:
                             "status": "success",
                             "provider": "motorapi",
                             "attempted_at": dt_util.utcnow().isoformat(),
-                            "vehicle": self._vehicle_fields(payload),
+                            "trigger": "manual" if manual else "automatic",
+                            "vehicle": self._vehicle_data(payload),
                         }
                     else:
                         result["status"] = "not_found"
@@ -201,19 +214,9 @@ class LPRManager:
         self.registry.mark_vehicle_lookup(plate, result)
         await self.store.async_save(self.registry.data)
         async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
+        return result
 
     @staticmethod
-    def _vehicle_fields(payload: dict[str, Any]) -> dict[str, Any]:
-        """Keep only display fields required by the integration."""
-        fields = (
-            "make",
-            "model",
-            "variant",
-            "model_type",
-            "model_year",
-            "color",
-            "chassis_type",
-            "fuel_type",
-            "type",
-        )
-        return {field: payload[field] for field in fields if payload.get(field) is not None}
+    def _vehicle_data(payload: dict[str, Any]) -> dict[str, Any]:
+        """Keep all master data returned by the MotorAPI vehicle endpoint."""
+        return {key: value for key, value in payload.items() if value is not None}
