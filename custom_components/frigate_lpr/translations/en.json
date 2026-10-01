@@ -39,14 +39,14 @@
         "menu_options": {
           "classification": "Classification thresholds",
           "vehicle_lookup": "Vehicle lookup via MotorAPI",
-          "snapshots": "Snapshots from Frigate",
+          "snapshots": "Snapshot from image entity",
           "add_plate": "Add or update a known license plate",
           "remove_plate": "Remove name and category"
         },
         "menu_option_descriptions": {
           "classification": "Choose when an observed plate is classified as Frequent.",
           "vehicle_lookup": "Enable optional vehicle data lookup for brand-new unknown plates.",
-          "snapshots": "Keep the latest event image locally on each vehicle case.",
+          "snapshots": "Select an image entity and copy its current image locally for each passage.",
           "add_plate": "Create or edit a local vehicle case with name, category and vehicle data.",
           "remove_plate": "Remove user data from a plate without deleting its observation history."
         }
@@ -70,18 +70,14 @@
         }
       },
       "snapshots": {
-        "title": "Snapshots from Frigate",
-        "description": "Optionally keep a local copy of the latest event snapshot for each plate. The image is stored in Home Assistant's .storage and replaced on the next passage.",
+        "title": "Snapshot from image entity",
+        "description": "Select the image entity Frigate updates with the current vehicle image. On each passage, the image is copied locally to the vehicle case and is only replaced by the next passage for that plate.",
         "data": {
           "snapshots_enabled": "Keep latest snapshot on the vehicle case",
-          "frigate_url": "Frigate URL",
-          "frigate_token": "Frigate token (optional)",
-          "verify_ssl": "Verify SSL certificate"
+          "snapshot_entity": "Image entity"
         },
         "data_description": {
-          "frigate_url": "Enter Frigate's full base address, including the protocol and optional port.",
-          "frigate_token": "Required for the authenticated API unless a proxy handles access. Port 5000 is normally suitable only on a trusted internal network.",
-          "verify_ssl": "Disable only for a self-signed certificate on a trusted network."
+          "snapshot_entity": "For example, Frigate's image entity for the camera or object providing the passage image."
         }
       },
       "add_plate": {

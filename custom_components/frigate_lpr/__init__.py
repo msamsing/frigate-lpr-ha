@@ -25,18 +25,15 @@ from .const import (
     CONF_CAMERA,
     CONF_FREQUENT_DAYS,
     CONF_FREQUENT_OBSERVATIONS,
-    CONF_FRIGATE_TOKEN,
-    CONF_FRIGATE_URL,
     CONF_MOTORAPI_ENABLED,
     CONF_MOTORAPI_KEY,
     CONF_SNAPSHOTS_ENABLED,
+    CONF_SNAPSHOT_ENTITY,
     CONF_TOPIC,
-    CONF_VERIFY_SSL,
     DEFAULT_FREQUENT_DAYS,
     DEFAULT_FREQUENT_OBSERVATIONS,
     DEFAULT_MOTORAPI_ENABLED,
     DEFAULT_SNAPSHOTS_ENABLED,
-    DEFAULT_VERIFY_SSL,
     DOMAIN,
     PLATFORMS,
     SERVICE_REMOVE_PLATE_METADATA,
@@ -102,9 +99,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -
         entry.options.get(CONF_MOTORAPI_ENABLED, DEFAULT_MOTORAPI_ENABLED),
         entry.options.get(CONF_MOTORAPI_KEY, ""),
         entry.options.get(CONF_SNAPSHOTS_ENABLED, DEFAULT_SNAPSHOTS_ENABLED),
-        entry.options.get(CONF_FRIGATE_URL, ""),
-        entry.options.get(CONF_FRIGATE_TOKEN, ""),
-        entry.options.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+        entry.options.get(CONF_SNAPSHOT_ENTITY, ""),
     )
     await manager.async_setup()
     entry.runtime_data = manager
@@ -218,9 +213,10 @@ class LPRSnapshotView(HomeAssistantView):
         image = await manager.async_snapshot_bytes(plate)
         if image is None:
             raise web.HTTPNotFound
+        snapshot = manager.registry.plates.get(plate.upper(), {}).get("snapshot") or {}
         return web.Response(
             body=image,
-            content_type="image/jpeg",
+            content_type=snapshot.get("content_type", "image/jpeg"),
             headers={"Cache-Control": "private, no-cache"},
         )
 

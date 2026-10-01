@@ -10,6 +10,8 @@ from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.selector import (
     BooleanSelector,
+    EntitySelector,
+    EntitySelectorConfig,
     TextSelector,
     TextSelectorConfig,
     TextSelectorType,
@@ -19,19 +21,16 @@ from .const import (
     CONF_CAMERA,
     CONF_FREQUENT_DAYS,
     CONF_FREQUENT_OBSERVATIONS,
-    CONF_FRIGATE_TOKEN,
-    CONF_FRIGATE_URL,
     CONF_MOTORAPI_ENABLED,
     CONF_MOTORAPI_KEY,
     CONF_SNAPSHOTS_ENABLED,
+    CONF_SNAPSHOT_ENTITY,
     CONF_TOPIC,
-    CONF_VERIFY_SSL,
     DEFAULT_FREQUENT_DAYS,
     DEFAULT_FREQUENT_OBSERVATIONS,
     DEFAULT_MOTORAPI_ENABLED,
     DEFAULT_SNAPSHOTS_ENABLED,
     DEFAULT_TOPIC,
-    DEFAULT_VERIFY_SSL,
     DOMAIN,
 )
 from .manager import LPRManager
@@ -136,10 +135,13 @@ class FrigateLPROptionsFlow(config_entries.OptionsFlow):
         )
 
     async def async_step_snapshots(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Configure persistent snapshots fetched from Frigate."""
+        """Configure persistent snapshots copied from an image entity."""
         if user_input is not None:
+            options = {**self.config_entry.options, **user_input}
+            for legacy_key in ("frigate_url", "frigate_token", "verify_ssl"):
+                options.pop(legacy_key, None)
             return self.async_create_entry(
-                title="", data={**self.config_entry.options, **user_input}
+                title="", data=options
             )
         return self.async_show_form(
             step_id="snapshots",
@@ -152,19 +154,9 @@ class FrigateLPROptionsFlow(config_entries.OptionsFlow):
                         ),
                     ): BooleanSelector(),
                     vol.Optional(
-                        CONF_FRIGATE_URL,
-                        default=self.config_entry.options.get(CONF_FRIGATE_URL, ""),
-                    ): TextSelector(TextSelectorConfig(type=TextSelectorType.URL)),
-                    vol.Optional(
-                        CONF_FRIGATE_TOKEN,
-                        default=self.config_entry.options.get(CONF_FRIGATE_TOKEN, ""),
-                    ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
-                    vol.Required(
-                        CONF_VERIFY_SSL,
-                        default=self.config_entry.options.get(
-                            CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL
-                        ),
-                    ): BooleanSelector(),
+                        CONF_SNAPSHOT_ENTITY,
+                        default=self.config_entry.options.get(CONF_SNAPSHOT_ENTITY, ""),
+                    ): EntitySelector(EntitySelectorConfig(domain="image")),
                 }
             ),
         )

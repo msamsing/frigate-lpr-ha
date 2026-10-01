@@ -8,11 +8,12 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import quote
 
 from aiohttp import ClientError, ClientTimeout
 from homeassistant.components import mqtt
+from homeassistant.components.image import async_get_image
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
@@ -37,9 +38,7 @@ class LPRManager:
         motorapi_enabled: bool = False,
         motorapi_key: str = "",
         snapshots_enabled: bool = False,
-        frigate_url: str = "",
-        frigate_token: str = "",
-        verify_ssl: bool = True,
+        snapshot_entity: str = "",
     ) -> None:
         self.hass = hass
         self.entry_id = entry_id
@@ -50,9 +49,7 @@ class LPRManager:
         self.motorapi_enabled = motorapi_enabled
         self.motorapi_key = motorapi_key
         self.snapshots_enabled = snapshots_enabled
-        self.frigate_url = frigate_url.rstrip("/")
-        self.frigate_token = frigate_token
-        self.verify_ssl = verify_ssl
+        self.snapshot_entity = snapshot_entity
         self.snapshot_dir = Path(hass.config.path(".storage", "frigate_lpr_snapshots"))
         self.store = Store(hass, STORAGE_VERSION, f"frigate_lpr.{entry_id}")
         self.registry = LPRRegistry(frequent_observations=frequent_observations, frequent_days=frequent_days)
@@ -126,17 +123,16 @@ class LPRManager:
                     )
             if (
                 self.snapshots_enabled
-                and self.frigate_url
+                and self.snapshot_entity
                 and normalized_plate
-                and payload.get("id")
             ):
                 self.hass.async_create_task(
                     self._async_store_snapshot(
                         normalized_plate,
-                        str(payload["id"]),
+                        str(payload.get("id", "")),
                         str(payload.get("camera", "")),
                     ),
-                    "Frigate LPR snapshot",
+                    "Frigate LPR image entity snapshot",
                 )
             async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
         except (ValueError, TypeError, KeyError, json.JSONDecodeError):
@@ -270,33 +266,24 @@ class LPRManager:
         return result
 
     async def _async_store_snapshot(self, plate: str, event_id: str, camera: str) -> None:
-        """Fetch the event snapshot and retain the latest image for one case."""
-        headers = {"Accept": "image/jpeg"}
-        if self.frigate_token:
-            headers["Authorization"] = f"Bearer {self.frigate_token}"
-        url = f"{self.frigate_url}/api/events/{quote(event_id, safe='')}/snapshot.jpg"
-        try:
-            session = async_get_clientsession(self.hass, verify_ssl=self.verify_ssl)
-            image: bytes | None = None
-            for delay in (2, 5, 10):
+        """Copy the current image entity content and retain it on one case."""
+        image_bytes: bytes | None = None
+        content_type = "image/jpeg"
+        for delay in (1, 3, 6):
+            try:
                 await asyncio.sleep(delay)
-                response = await session.get(
-                    url,
-                    headers=headers,
-                    params={"quality": 82},
-                    timeout=ClientTimeout(total=20),
-                )
-                async with response:
-                    if response.status == 200:
-                        image = await response.read()
-                        break
-                    if response.status not in {404, 422}:
-                        _LOGGER.warning("Frigate snapshot returned HTTP %s", response.status)
-                        return
-            if not image or len(image) > 8 * 1024 * 1024:
-                _LOGGER.warning("Frigate snapshot was unavailable, empty or oversized")
+                image = await async_get_image(self.hass, self.snapshot_entity)
+                if image.content:
+                    image_bytes = image.content
+                    content_type = image.content_type
+                    break
+            except (HomeAssistantError, KeyError, TimeoutError):
+                continue
+        try:
+            if not image_bytes or len(image_bytes) > 8 * 1024 * 1024:
+                _LOGGER.warning("Snapshot image entity was unavailable, empty or oversized")
                 return
-            await self.hass.async_add_executor_job(self._write_snapshot, plate, image)
+            await self.hass.async_add_executor_job(self._write_snapshot, plate, image_bytes)
             record = self.registry.plates.get(plate)
             if record is None:
                 return
@@ -304,16 +291,18 @@ class LPRManager:
                 "event_id": event_id,
                 "captured_at": dt_util.utcnow().isoformat(),
                 "camera": camera,
+                "source_entity": self.snapshot_entity,
+                "content_type": content_type,
             }
             await self.store.async_save(self.registry.data)
             async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
-        except (ClientError, TimeoutError, OSError):
-            _LOGGER.warning("Unable to store Frigate snapshot", exc_info=True)
+        except OSError:
+            _LOGGER.warning("Unable to store snapshot from image entity", exc_info=True)
 
     def _write_snapshot(self, plate: str, image: bytes) -> None:
         """Write a snapshot atomically outside the event loop."""
         self.snapshot_dir.mkdir(parents=True, exist_ok=True)
-        target = self.snapshot_dir / f"{normalize_plate(plate)}.jpg"
+        target = self.snapshot_dir / f"{normalize_plate(plate)}.img"
         temporary = target.with_suffix(".tmp")
         temporary.write_bytes(image)
         temporary.replace(target)
@@ -324,7 +313,9 @@ class LPRManager:
 
     def _read_snapshot(self, plate: str) -> bytes | None:
         """Read a snapshot outside the event loop."""
-        path = self.snapshot_dir / f"{normalize_plate(plate)}.jpg"
+        path = self.snapshot_dir / f"{normalize_plate(plate)}.img"
+        if not path.is_file():
+            path = self.snapshot_dir / f"{normalize_plate(plate)}.jpg"
         if not path.is_file():
             return None
         return path.read_bytes()

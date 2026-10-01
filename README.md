@@ -95,22 +95,20 @@ Hvis en plade skal beskyttes mod opslag, skal den oprettes som **Egen** eller **
 lokal**, før den observeres første gang. Når en ukendt plade først er sendt til API'et,
 kan det tidligere netværkskald naturligvis ikke trækkes tilbage.
 
-### Valgfrit passagebillede fra Frigate
+### Valgfrit passagebillede fra en image-entitet
 
-Under **Indstillinger → Snapshots fra Frigate** kan integrationen hente Frigates
-event-snapshot for hver LPR-observation. Angiv Frigates grundadresse, eksempelvis
-`http://192.168.1.20:5000` på et betroet internt netværk eller den autentificerede
-adresse på port 8971 sammen med et token.
+Under **Indstillinger → Snapshot fra billedentitet** kan brugeren vælge den
+Home Assistant-`image`-entitet, som Frigate opdaterer med det aktuelle
+køretøjsbillede, eksempelvis `image.indkoersel_car`. Der kræves ingen Frigate-adresse,
+API-token eller særskilt SSL-konfiguration.
 
-Integrationen bruger event-ID'et fra `tracked_object_update`, prøver kortvarigt igen,
-hvis Frigate endnu ikke har gjort billedet klar, og gemmer derefter billedet i
-Home Assistants `.storage/frigate_lpr_snapshots`. Der gemmes kun det seneste billede
-pr. nummerplade; det erstattes ved næste passage, men udløber ikke sammen med
-Frigates egen snapshot-retention. Billedet udleveres kun gennem et autentificeret
-Home Assistant-endpoint og kan åbnes i stor størrelse fra køretøjssagen.
-
-Frigate skal have snapshots aktiveret. Se [Frigates snapshot-dokumentation](https://docs.frigate.video/configuration/snapshots/)
-og [event-snapshot-API](https://docs.frigate.video/integrations/api/event-snapshot-events-event-id-snapshot-jpg-get/).
+Ved hver LPR-observation venter integrationen kort på, at billedentiteten opdateres,
+og kopierer derefter billedet til Home Assistants
+`.storage/frigate_lpr_snapshots`. Der gemmes kun det seneste billede pr.
+nummerplade. Den lokale kopi ændres derfor ikke, når image-entiteten senere viser
+en anden bil; den erstattes først ved næste passage for samme nummerplade. Billedet
+udleveres kun gennem et autentificeret Home Assistant-endpoint og kan åbnes i stor
+størrelse fra køretøjssagen.
 
 Frigate sender LPR som `type: lpr` med felterne `id`, `plate`, `camera`, `score` og
 `timestamp`. Andre meddelelsestyper ignoreres. Kameraer filtreres kun, hvis brugeren vælger det.
