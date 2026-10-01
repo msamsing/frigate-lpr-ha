@@ -19,13 +19,19 @@ from .const import (
     CONF_CAMERA,
     CONF_FREQUENT_DAYS,
     CONF_FREQUENT_OBSERVATIONS,
+    CONF_FRIGATE_TOKEN,
+    CONF_FRIGATE_URL,
     CONF_MOTORAPI_ENABLED,
     CONF_MOTORAPI_KEY,
+    CONF_SNAPSHOTS_ENABLED,
     CONF_TOPIC,
+    CONF_VERIFY_SSL,
     DEFAULT_FREQUENT_DAYS,
     DEFAULT_FREQUENT_OBSERVATIONS,
     DEFAULT_MOTORAPI_ENABLED,
+    DEFAULT_SNAPSHOTS_ENABLED,
     DEFAULT_TOPIC,
+    DEFAULT_VERIFY_SSL,
     DOMAIN,
 )
 from .manager import LPRManager
@@ -74,7 +80,7 @@ class FrigateLPROptionsFlow(config_entries.OptionsFlow):
         """Show the settings menu."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["classification", "vehicle_lookup", "add_plate", "remove_plate"],
+            menu_options=["classification", "vehicle_lookup", "snapshots", "add_plate", "remove_plate"],
         )
 
     async def async_step_classification(self, user_input: dict[str, Any] | None = None) -> FlowResult:
@@ -125,6 +131,40 @@ class FrigateLPROptionsFlow(config_entries.OptionsFlow):
                         CONF_MOTORAPI_KEY,
                         default=self.config_entry.options.get(CONF_MOTORAPI_KEY, ""),
                     ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+                }
+            ),
+        )
+
+    async def async_step_snapshots(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Configure persistent snapshots fetched from Frigate."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title="", data={**self.config_entry.options, **user_input}
+            )
+        return self.async_show_form(
+            step_id="snapshots",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_SNAPSHOTS_ENABLED,
+                        default=self.config_entry.options.get(
+                            CONF_SNAPSHOTS_ENABLED, DEFAULT_SNAPSHOTS_ENABLED
+                        ),
+                    ): BooleanSelector(),
+                    vol.Optional(
+                        CONF_FRIGATE_URL,
+                        default=self.config_entry.options.get(CONF_FRIGATE_URL, ""),
+                    ): TextSelector(TextSelectorConfig(type=TextSelectorType.URL)),
+                    vol.Optional(
+                        CONF_FRIGATE_TOKEN,
+                        default=self.config_entry.options.get(CONF_FRIGATE_TOKEN, ""),
+                    ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+                    vol.Required(
+                        CONF_VERIFY_SSL,
+                        default=self.config_entry.options.get(
+                            CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL
+                        ),
+                    ): BooleanSelector(),
                 }
             ),
         )

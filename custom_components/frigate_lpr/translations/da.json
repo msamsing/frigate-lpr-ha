@@ -31,12 +31,14 @@
         "menu_options": {
           "classification": "Klassifikationsgrænser",
           "vehicle_lookup": "Køretøjsopslag via MotorAPI",
+          "snapshots": "Snapshots fra Frigate",
           "add_plate": "Tilføj eller opdater kendt nummerplade",
           "remove_plate": "Fjern navn og kategori"
         },
         "menu_option_descriptions": {
           "classification": "Bestem hvornår en observeret plade klassificeres som Hyppig.",
           "vehicle_lookup": "Aktivér valgfrit opslag af bildata for helt nye, ukendte plader.",
+          "snapshots": "Gem det seneste eventbillede lokalt på hver køretøjssag.",
           "add_plate": "Opret eller rediger en lokal køretøjssag med navn, kategori og bildata.",
           "remove_plate": "Fjern brugerdata fra en plade uden at slette observationshistorikken."
         }
@@ -57,6 +59,21 @@
         },
         "data_description": {
           "motorapi_key": "Hent en API-nøgle på motorapi.dk. Nøglen gemmes i Home Assistants konfiguration."
+        }
+      },
+      "snapshots": {
+        "title": "Snapshots fra Frigate",
+        "description": "Valgfri lokal kopi af det seneste event-snapshot for hver nummerplade. Billedet gemmes i Home Assistants .storage og erstattes ved næste passage.",
+        "data": {
+          "snapshots_enabled": "Gem seneste snapshot på køretøjssagen",
+          "frigate_url": "Frigate-adresse",
+          "frigate_token": "Frigate-token (valgfrit)",
+          "verify_ssl": "Kontrollér SSL-certifikat"
+        },
+        "data_description": {
+          "frigate_url": "Eksempel: http://192.168.1.20:5000 eller https://frigate.example.dk:8971.",
+          "frigate_token": "Kræves ved den autentificerede API, medmindre en proxy håndterer adgangen. Port 5000 er normalt kun egnet på et betroet internt netværk.",
+          "verify_ssl": "Deaktivér kun ved et selvsigneret certifikat på et betroet netværk."
         }
       },
       "add_plate": {

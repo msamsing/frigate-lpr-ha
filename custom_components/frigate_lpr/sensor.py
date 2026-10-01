@@ -141,6 +141,7 @@ class LPRPlateSensor(LPRBaseSensor):
             "intervals_seconds": view["intervals_seconds"][-50:],
             "average_interval_hours": view["average_interval_hours"],
             "time_stats": view["time_stats"],
+            "pattern": view["pattern"],
             "observations": view["observations"][-50:],
             "shown_observations": min(50, view["count"]),
             "stored_observations": view["count"],
@@ -148,4 +149,5 @@ class LPRPlateSensor(LPRBaseSensor):
             "vehicle_source": view.get("vehicle_source"),
             "vehicle_lookup_status": (view.get("vehicle_lookup") or {}).get("status", "not_attempted"),
             "notes": view.get("notes", ""),
+            "snapshot": view.get("snapshot"),
         }

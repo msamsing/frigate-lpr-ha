@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 import math
+from statistics import median
 import re
 from typing import Any
 
@@ -34,6 +35,7 @@ class LPRRegistry:
             record.setdefault("vehicle_lookup", None)
             record.setdefault("vehicle_source", None)
             record.setdefault("notes", "")
+            record.setdefault("snapshot", None)
         self.frequent_observations = frequent_observations
         self.frequent_days = frequent_days
 
@@ -161,6 +163,7 @@ class LPRRegistry:
             "different_days": len(record["days"]),
             "average_interval_hours": round(sum(intervals) / len(intervals) / 3600, 1) if intervals else None,
             "time_stats": self._time_stats(record["observations"]),
+            "pattern": self._pattern_analysis(record["observations"]),
         }
 
     @staticmethod
@@ -204,6 +207,110 @@ class LPRRegistry:
                 {"date": (now.date() - timedelta(days=offset)).isoformat(), "count": daily.get((now.date() - timedelta(days=offset)).isoformat(), 0)}
                 for offset in range(6, -1, -1)
             ],
+        }
+
+    @staticmethod
+    def _pattern_analysis(observations: list[dict[str, Any]]) -> dict[str, Any]:
+        """Describe recurring behavior using explicit, inspectable rules."""
+        count = len(observations)
+        if not count:
+            return {"primary": "Ingen observationer", "secondary": [], "confidence": "Ingen", "evidence": []}
+        timestamps = sorted(datetime.fromisoformat(item["timestamp"]) for item in observations)
+        active_dates = sorted({stamp.date() for stamp in timestamps})
+        days = len(active_dates)
+        confidence = "Høj" if count >= 25 and days >= 10 else "Middel" if count >= 10 and days >= 5 else "Lav"
+        if count == 1:
+            return {
+                "primary": "Kun observeret én gang",
+                "secondary": [],
+                "confidence": "Lav",
+                "evidence": ["1 observation på 1 dag"],
+            }
+        if count < 5 or days < 2:
+            return {
+                "primary": "For lidt data til et sikkert mønster",
+                "secondary": [],
+                "confidence": "Lav",
+                "evidence": [f"{count} observationer på {days} dag{'e' if days != 1 else ''}"],
+            }
+
+        minutes = [stamp.hour * 60 + stamp.minute for stamp in timestamps]
+        periods = (
+            ("om natten", 0, 300),
+            ("om morgenen", 300, 540),
+            ("om formiddagen", 540, 720),
+            ("om eftermiddagen", 720, 1020),
+            ("om aftenen", 1020, 1320),
+            ("sent om aftenen", 1320, 1440),
+        )
+        period_counts = [(label, sum(start <= minute < end for minute in minutes)) for label, start, end in periods]
+        dominant_label, dominant_count = max(period_counts, key=lambda item: item[1])
+        dominant_share = dominant_count / count
+
+        two_hour_bins = [0] * 12
+        for minute in minutes:
+            two_hour_bins[minute // 120] += 1
+        peaks = sorted(range(12), key=lambda index: two_hour_bins[index], reverse=True)[:2]
+        separated = min(abs(peaks[0] - peaks[1]), 12 - abs(peaks[0] - peaks[1])) >= 2
+        bimodal = count >= 10 and separated and all(two_hour_bins[index] / count >= 0.2 for index in peaks)
+
+        weekday = sum(stamp.weekday() < 5 for stamp in timestamps)
+        weekend = count - weekday
+        weekday_density = weekday / 5
+        weekend_density = weekend / 2
+        weekday_text = None
+        if weekday_density >= weekend_density * 1.5 and weekday / count >= 0.65:
+            weekday_text = "Ses typisk på hverdage"
+        elif weekend_density >= weekday_density * 1.5 and weekend / count >= 0.45:
+            weekday_text = "Ses primært i weekender"
+
+        date_counts = Counter(stamp.date() for stamp in timestamps)
+        per_active_day = median(date_counts.values())
+        intervals = [(current - previous).days for previous, current in zip(active_dates, active_dates[1:])]
+        median_interval = median(intervals) if intervals else None
+        interval_spread = median([abs(value - median_interval) for value in intervals]) if intervals else None
+
+        latest = timestamps[-1]
+        zone = latest.tzinfo or timezone.utc
+        now = datetime.now(zone)
+        recent_30 = sum(stamp >= now - timedelta(days=30) for stamp in timestamps)
+        previous_30 = sum(now - timedelta(days=60) <= stamp < now - timedelta(days=30) for stamp in timestamps)
+
+        stats = LPRRegistry._time_stats(observations)
+        evidence = [f"{count} observationer på {days} forskellige dage"]
+        secondary: list[str] = []
+        if bimodal:
+            peak_times = sorted((index * 120 + 60 for index in peaks))
+            primary = f"To tydelige tidspunkter omkring {peak_times[0] // 60:02d}:00 og {peak_times[1] // 60:02d}:00"
+            evidence.append(f"{sum(two_hour_bins[index] for index in peaks) / count:.0%} ligger i de to største tidsklynger")
+        elif dominant_share >= 0.7 and (stats["spread_minutes"] or 0) <= 90:
+            primary = f"Regelmæssigt mønster {dominant_label}"
+            evidence.append(f"{dominant_share:.0%} af observationerne er {dominant_label}")
+        elif median_interval is not None and 5 <= median_interval <= 9 and (interval_spread or 0) <= 2:
+            primary = "Omtrent ugentlig rytme"
+            evidence.append(f"Typisk {median_interval:g} dage mellem aktive dage")
+        elif count >= 8 and days >= 4:
+            primary = "Hyppigt, men uden et fast tidspunkt"
+        else:
+            primary = "Uregelmæssige observationer"
+
+        if weekday_text:
+            secondary.append(weekday_text)
+            evidence.append(f"{weekday / count:.0%} af observationerne er på hverdage")
+        if per_active_day >= 2:
+            secondary.append(f"Typisk {per_active_day:g} passager på aktive dage")
+        if previous_30 >= 3 and recent_30 >= previous_30 * 1.5:
+            secondary.append("Observeres oftere end i den foregående 30-dages periode")
+            evidence.append(f"{recent_30} mod {previous_30} passager i de to seneste 30-dages perioder")
+        elif recent_30 >= 3 and previous_30 >= recent_30 * 1.5:
+            secondary.append("Observeres sjældnere end i den foregående 30-dages periode")
+            evidence.append(f"{recent_30} mod {previous_30} passager i de to seneste 30-dages perioder")
+
+        return {
+            "primary": primary,
+            "secondary": secondary[:2],
+            "confidence": confidence,
+            "evidence": evidence[:4],
         }
 
     def should_lookup_vehicle(self, plate: str) -> bool:
@@ -343,4 +450,5 @@ class LPRRegistry:
             "vehicle_lookup": None,
             "vehicle_source": None,
             "notes": "",
+            "snapshot": None,
         }

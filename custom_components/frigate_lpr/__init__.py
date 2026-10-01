@@ -5,10 +5,11 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from aiohttp import web
 import voluptuous as vol
 
 from homeassistant.components import frontend
-from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.http import KEY_HASS, HomeAssistantView, StaticPathConfig
 from homeassistant.components.lovelace.const import LOVELACE_DATA, MODE_STORAGE
 from homeassistant.components.lovelace.resources import ResourceStorageCollection
 from homeassistant.config_entries import ConfigEntry
@@ -23,17 +24,24 @@ from .const import (
     CONF_CAMERA,
     CONF_FREQUENT_DAYS,
     CONF_FREQUENT_OBSERVATIONS,
+    CONF_FRIGATE_TOKEN,
+    CONF_FRIGATE_URL,
     CONF_MOTORAPI_ENABLED,
     CONF_MOTORAPI_KEY,
+    CONF_SNAPSHOTS_ENABLED,
     CONF_TOPIC,
+    CONF_VERIFY_SSL,
     DEFAULT_FREQUENT_DAYS,
     DEFAULT_FREQUENT_OBSERVATIONS,
     DEFAULT_MOTORAPI_ENABLED,
+    DEFAULT_SNAPSHOTS_ENABLED,
+    DEFAULT_VERIFY_SSL,
     DOMAIN,
     PLATFORMS,
     SERVICE_REMOVE_PLATE_METADATA,
     SERVICE_LOOKUP_VEHICLE,
     SERVICE_SET_PLATE,
+    SNAPSHOT_API_PATH,
     STATIC_URL_PATH,
 )
 from .manager import LPRManager
@@ -41,6 +49,7 @@ from .migration import async_remove_legacy_dashboard
 
 _LOGGER = logging.getLogger(__name__)
 _FRONTEND_REGISTERED = f"{DOMAIN}_frontend_registered"
+_SNAPSHOT_VIEW_REGISTERED = f"{DOMAIN}_snapshot_view_registered"
 
 FrigateLPRConfigEntry = ConfigEntry[LPRManager]
 
@@ -76,9 +85,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -
         entry.options.get(CONF_FREQUENT_DAYS, DEFAULT_FREQUENT_DAYS),
         entry.options.get(CONF_MOTORAPI_ENABLED, DEFAULT_MOTORAPI_ENABLED),
         entry.options.get(CONF_MOTORAPI_KEY, ""),
+        entry.options.get(CONF_SNAPSHOTS_ENABLED, DEFAULT_SNAPSHOTS_ENABLED),
+        entry.options.get(CONF_FRIGATE_URL, ""),
+        entry.options.get(CONF_FRIGATE_TOKEN, ""),
+        entry.options.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
     )
     await manager.async_setup()
     entry.runtime_data = manager
+    hass.data.setdefault(DOMAIN, {})["manager"] = manager
+    if not hass.data.get(_SNAPSHOT_VIEW_REGISTERED):
+        hass.http.register_view(LPRSnapshotView())
+        hass.data[_SNAPSHOT_VIEW_REGISTERED] = True
 
     async def set_plate(call: ServiceCall) -> None:
         vehicle_field_map = {
@@ -126,6 +143,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) 
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         await entry.runtime_data.async_unload()
+        hass.data.get(DOMAIN, {}).pop("manager", None)
         hass.services.async_remove(DOMAIN, SERVICE_SET_PLATE)
         hass.services.async_remove(DOMAIN, SERVICE_REMOVE_PLATE_METADATA)
         hass.services.async_remove(DOMAIN, SERVICE_LOOKUP_VEHICLE)
@@ -135,6 +153,27 @@ async def async_unload_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) 
 
 async def _async_reload_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+class LPRSnapshotView(HomeAssistantView):
+    """Serve locally retained vehicle snapshots to authenticated HA users."""
+
+    url = SNAPSHOT_API_PATH
+    name = "api:frigate_lpr:snapshot"
+    requires_auth = True
+
+    async def get(self, request: web.Request, plate: str) -> web.Response:
+        manager: LPRManager | None = request.app[KEY_HASS].data.get(DOMAIN, {}).get("manager")
+        if manager is None:
+            raise web.HTTPNotFound
+        image = await manager.async_snapshot_bytes(plate)
+        if image is None:
+            raise web.HTTPNotFound
+        return web.Response(
+            body=image,
+            content_type="image/jpeg",
+            headers={"Cache-Control": "private, no-cache"},
+        )
 
 
 async def _async_register_card(hass: HomeAssistant) -> None:

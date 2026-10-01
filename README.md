@@ -22,6 +22,8 @@ observationshistorikken.
 - Navngivning og kategorierne Egen, Kendt, Ukendt og Uønsket gennem kortet eller handlingen `frigate_lpr.set_plate`.
 - Egne og andre kendte plader kan oprettes efter installationen.
 - Medfølgende Lovelace-kort, som kan vælges og konfigureres direkte i dashboard-editoren.
+- Forklarlig mønsteranalyse med tidsklynger, ugedage, besøgsrytme, udvikling og sikkerhedsgrad.
+- Valgfrit permanent snapshot af den seneste passage på hver køretøjssag.
 - Valgfrit MotorAPI-opslag af mærke, model og andre grunddata for helt nye, ukendte plader.
 - Plader, som brugeren har navngivet eller markeret som Egen, Kendt eller Uønsket, sendes aldrig automatisk til MotorAPI.
 
@@ -90,6 +92,23 @@ Hvis en plade skal beskyttes mod opslag, skal den oprettes som **Egen** eller **
 lokal**, før den observeres første gang. Når en ukendt plade først er sendt til API'et,
 kan det tidligere netværkskald naturligvis ikke trækkes tilbage.
 
+### Valgfrit passagebillede fra Frigate
+
+Under **Indstillinger → Snapshots fra Frigate** kan integrationen hente Frigates
+event-snapshot for hver LPR-observation. Angiv Frigates grundadresse, eksempelvis
+`http://192.168.1.20:5000` på et betroet internt netværk eller den autentificerede
+adresse på port 8971 sammen med et token.
+
+Integrationen bruger event-ID'et fra `tracked_object_update`, prøver kortvarigt igen,
+hvis Frigate endnu ikke har gjort billedet klar, og gemmer derefter billedet i
+Home Assistants `.storage/frigate_lpr_snapshots`. Der gemmes kun det seneste billede
+pr. nummerplade; det erstattes ved næste passage, men udløber ikke sammen med
+Frigates egen snapshot-retention. Billedet udleveres kun gennem et autentificeret
+Home Assistant-endpoint og kan åbnes i stor størrelse fra køretøjssagen.
+
+Frigate skal have snapshots aktiveret. Se [Frigates snapshot-dokumentation](https://docs.frigate.video/configuration/snapshots/)
+og [event-snapshot-API](https://docs.frigate.video/integrations/api/event-snapshot-events-event-id-snapshot-jpg-get/).
+
 Frigate sender LPR som `type: lpr` med felterne `id`, `plate`, `camera`, `score` og
 `timestamp`. Andre meddelelsestyper ignoreres. Kameraer filtreres kun, hvis brugeren vælger det.
 
@@ -115,7 +134,10 @@ med de seneste passager. På telefon bruges fanerne **Seneste**, **Køretøjer**
 Kategori og bemærkning kan ændres direkte i detaljevisningen. Den fulde editor kan
 oprette og redigere køretøjssager med navn/relation og stamdata. Graferne viser
 tidspunkt på døgnet og passager i den seneste uge; mønsterteksten er alene baseret
-på observationerne. Kortets layout reagerer på sin egen bredde via container queries
+på observationerne. Den viser en primær konklusion, op til to sekundære fund,
+sikkerhedsgrad og de konkrete tal bag resultatet. Analysen kan genkende tidsklynger,
+hverdags-/weekendtendenser, ugentlig rytme, flere daglige passager og udvikling mellem
+30-dages perioder uden at gætte på ejer eller tilhørsforhold. Kortets layout reagerer på sin egen bredde via container queries
 og følger Home Assistants aktive lyse eller mørke tema. Oplysningerne gemmes af
 integrationen i Home Assistants persistente lager.
 

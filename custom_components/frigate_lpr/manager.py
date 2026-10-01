@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 import json
 import logging
+from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import quote
 
 from aiohttp import ClientError, ClientTimeout
 from homeassistant.components import mqtt
@@ -33,6 +36,10 @@ class LPRManager:
         frequent_days: int,
         motorapi_enabled: bool = False,
         motorapi_key: str = "",
+        snapshots_enabled: bool = False,
+        frigate_url: str = "",
+        frigate_token: str = "",
+        verify_ssl: bool = True,
     ) -> None:
         self.hass = hass
         self.entry_id = entry_id
@@ -42,6 +49,11 @@ class LPRManager:
         self.frequent_days = frequent_days
         self.motorapi_enabled = motorapi_enabled
         self.motorapi_key = motorapi_key
+        self.snapshots_enabled = snapshots_enabled
+        self.frigate_url = frigate_url.rstrip("/")
+        self.frigate_token = frigate_token
+        self.verify_ssl = verify_ssl
+        self.snapshot_dir = Path(hass.config.path(".storage", "frigate_lpr_snapshots"))
         self.store = Store(hass, STORAGE_VERSION, f"frigate_lpr.{entry_id}")
         self.registry = LPRRegistry(frequent_observations=frequent_observations, frequent_days=frequent_days)
         self.unsubscribe: Callable[[], None] | None = None
@@ -112,6 +124,20 @@ class LPRManager:
                         self._async_lookup_vehicle(normalized_plate),
                         "Frigate LPR vehicle lookup",
                     )
+            if (
+                self.snapshots_enabled
+                and self.frigate_url
+                and normalized_plate
+                and payload.get("id")
+            ):
+                self.hass.async_create_task(
+                    self._async_store_snapshot(
+                        normalized_plate,
+                        str(payload["id"]),
+                        str(payload.get("camera", "")),
+                    ),
+                    "Frigate LPR snapshot",
+                )
             async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
         except (ValueError, TypeError, KeyError, json.JSONDecodeError):
             _LOGGER.warning("Ignored invalid Frigate LPR payload", exc_info=True)
@@ -215,6 +241,66 @@ class LPRManager:
         await self.store.async_save(self.registry.data)
         async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
         return result
+
+    async def _async_store_snapshot(self, plate: str, event_id: str, camera: str) -> None:
+        """Fetch the event snapshot and retain the latest image for one case."""
+        headers = {"Accept": "image/jpeg"}
+        if self.frigate_token:
+            headers["Authorization"] = f"Bearer {self.frigate_token}"
+        url = f"{self.frigate_url}/api/events/{quote(event_id, safe='')}/snapshot.jpg"
+        try:
+            session = async_get_clientsession(self.hass, verify_ssl=self.verify_ssl)
+            image: bytes | None = None
+            for delay in (2, 5, 10):
+                await asyncio.sleep(delay)
+                response = await session.get(
+                    url,
+                    headers=headers,
+                    params={"quality": 82},
+                    timeout=ClientTimeout(total=20),
+                )
+                async with response:
+                    if response.status == 200:
+                        image = await response.read()
+                        break
+                    if response.status not in {404, 422}:
+                        _LOGGER.warning("Frigate snapshot returned HTTP %s", response.status)
+                        return
+            if not image or len(image) > 8 * 1024 * 1024:
+                _LOGGER.warning("Frigate snapshot was unavailable, empty or oversized")
+                return
+            await self.hass.async_add_executor_job(self._write_snapshot, plate, image)
+            record = self.registry.plates.get(plate)
+            if record is None:
+                return
+            record["snapshot"] = {
+                "event_id": event_id,
+                "captured_at": dt_util.utcnow().isoformat(),
+                "camera": camera,
+            }
+            await self.store.async_save(self.registry.data)
+            async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
+        except (ClientError, TimeoutError, OSError):
+            _LOGGER.warning("Unable to store Frigate snapshot", exc_info=True)
+
+    def _write_snapshot(self, plate: str, image: bytes) -> None:
+        """Write a snapshot atomically outside the event loop."""
+        self.snapshot_dir.mkdir(parents=True, exist_ok=True)
+        target = self.snapshot_dir / f"{normalize_plate(plate)}.jpg"
+        temporary = target.with_suffix(".tmp")
+        temporary.write_bytes(image)
+        temporary.replace(target)
+
+    async def async_snapshot_bytes(self, plate: str) -> bytes | None:
+        """Read a locally retained snapshot for the authenticated HTTP view."""
+        return await self.hass.async_add_executor_job(self._read_snapshot, plate)
+
+    def _read_snapshot(self, plate: str) -> bytes | None:
+        """Read a snapshot outside the event loop."""
+        path = self.snapshot_dir / f"{normalize_plate(plate)}.jpg"
+        if not path.is_file():
+            return None
+        return path.read_bytes()
 
     @staticmethod
     def _vehicle_data(payload: dict[str, Any]) -> dict[str, Any]:

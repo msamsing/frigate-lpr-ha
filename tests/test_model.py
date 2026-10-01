@@ -69,6 +69,40 @@ class LPRRegistryTests(unittest.TestCase):
         self.assertEqual(stats["hour_counts"][8], 2)
         self.assertEqual(sum(day["count"] for day in stats["daily_counts"]), 2)
 
+    def test_refined_pattern_analysis_is_explainable(self):
+        registry = LPRRegistry()
+        start = datetime.now(timezone.utc).replace(hour=7, minute=30, second=0, microsecond=0)
+        for index in range(12):
+            registry.observe(
+                "MORNING1",
+                start - timedelta(days=index),
+                str(index),
+                camera="test_camera",
+            )
+        pattern = registry.plate_view("MORNING1")["pattern"]
+
+        self.assertEqual(pattern["primary"], "Regelmæssigt mønster om morgenen")
+        self.assertEqual(pattern["confidence"], "Middel")
+        self.assertTrue(any("observationer" in item for item in pattern["evidence"]))
+
+    def test_refined_pattern_detects_two_daily_clusters(self):
+        registry = LPRRegistry()
+        start = datetime.now(timezone.utc).replace(hour=7, minute=0, second=0, microsecond=0)
+        event = 0
+        for day in range(6):
+            for hour in (7, 16):
+                event += 1
+                registry.observe(
+                    "TWICE1",
+                    (start - timedelta(days=day)).replace(hour=hour),
+                    str(event),
+                    camera="test_camera",
+                )
+        pattern = registry.plate_view("TWICE1")["pattern"]
+
+        self.assertTrue(pattern["primary"].startswith("To tydelige tidspunkter"))
+        self.assertIn("Typisk 2 passager på aktive dage", pattern["secondary"])
+
     def test_roundtrip_persistence_and_daily_summary(self):
         registry = LPRRegistry()
         seen = datetime(2026, 9, 26, 12, tzinfo=timezone.utc)

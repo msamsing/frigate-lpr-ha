@@ -39,12 +39,14 @@
         "menu_options": {
           "classification": "Classification thresholds",
           "vehicle_lookup": "Vehicle lookup via MotorAPI",
+          "snapshots": "Snapshots from Frigate",
           "add_plate": "Add or update a known license plate",
           "remove_plate": "Remove name and category"
         },
         "menu_option_descriptions": {
           "classification": "Choose when an observed plate is classified as Frequent.",
           "vehicle_lookup": "Enable optional vehicle data lookup for brand-new unknown plates.",
+          "snapshots": "Keep the latest event image locally on each vehicle case.",
           "add_plate": "Create or edit a local vehicle case with name, category and vehicle data.",
           "remove_plate": "Remove user data from a plate without deleting its observation history."
         }
@@ -65,6 +67,21 @@
         },
         "data_description": {
           "motorapi_key": "Get an API key from motorapi.dk. The key is stored in Home Assistant's configuration."
+        }
+      },
+      "snapshots": {
+        "title": "Snapshots from Frigate",
+        "description": "Optionally keep a local copy of the latest event snapshot for each plate. The image is stored in Home Assistant's .storage and replaced on the next passage.",
+        "data": {
+          "snapshots_enabled": "Keep latest snapshot on the vehicle case",
+          "frigate_url": "Frigate URL",
+          "frigate_token": "Frigate token (optional)",
+          "verify_ssl": "Verify SSL certificate"
+        },
+        "data_description": {
+          "frigate_url": "Example: http://192.168.1.20:5000 or https://frigate.example.com:8971.",
+          "frigate_token": "Required for the authenticated API unless a proxy handles access. Port 5000 is normally suitable only on a trusted internal network.",
+          "verify_ssl": "Disable only for a self-signed certificate on a trusted network."
         }
       },
       "add_plate": {

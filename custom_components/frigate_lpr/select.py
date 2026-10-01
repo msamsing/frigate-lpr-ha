@@ -89,11 +89,13 @@ class LPRPlateSelect(SelectEntity):
             "different_days": view["different_days"],
             "average_interval_hours": view["average_interval_hours"],
             "time_stats": view["time_stats"],
+            "pattern": view["pattern"],
             "observations": view["observations"][-20:],
             "vehicle": view.get("vehicle"),
             "vehicle_source": view.get("vehicle_source"),
             "vehicle_lookup_status": (view.get("vehicle_lookup") or {}).get("status", "not_attempted"),
             "notes": view.get("notes", ""),
+            "snapshot": view.get("snapshot"),
         }
 
     async def async_added_to_hass(self) -> None:
