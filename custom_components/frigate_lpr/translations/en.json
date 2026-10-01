@@ -79,7 +79,7 @@
           "verify_ssl": "Verify SSL certificate"
         },
         "data_description": {
-          "frigate_url": "Example: http://192.168.1.20:5000 or https://frigate.example.com:8971.",
+          "frigate_url": "Enter Frigate's full base address, including the protocol and optional port.",
           "frigate_token": "Required for the authenticated API unless a proxy handles access. Port 5000 is normally suitable only on a trusted internal network.",
           "verify_ssl": "Disable only for a self-signed certificate on a trusted network."
         }

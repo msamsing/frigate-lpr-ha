@@ -71,7 +71,7 @@
           "verify_ssl": "Kontrollér SSL-certifikat"
         },
         "data_description": {
-          "frigate_url": "Eksempel: http://192.168.1.20:5000 eller https://frigate.example.dk:8971.",
+          "frigate_url": "Angiv Frigates fulde grundadresse inklusive protokol og eventuel port.",
           "frigate_token": "Kræves ved den autentificerede API, medmindre en proxy håndterer adgangen. Port 5000 er normalt kun egnet på et betroet internt netværk.",
           "verify_ssl": "Deaktivér kun ved et selvsigneret certifikat på et betroet netværk."
         }
