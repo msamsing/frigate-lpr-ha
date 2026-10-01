@@ -17,6 +17,7 @@ from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CARD_RESOURCE_PATH,
@@ -40,7 +41,9 @@ from .const import (
     PLATFORMS,
     SERVICE_REMOVE_PLATE_METADATA,
     SERVICE_LOOKUP_VEHICLE,
+    SERVICE_REMOVE_OBSERVATION,
     SERVICE_SET_PLATE,
+    SERVICE_UPDATE_OBSERVATION,
     SNAPSHOT_API_PATH,
     STATIC_URL_PATH,
 )
@@ -68,9 +71,22 @@ SET_PLATE_SCHEMA = vol.Schema(
         vol.Optional("chassis_type"): cv.string,
         vol.Optional("fuel_type"): cv.string,
         vol.Optional("vehicle_type"): cv.string,
+        vol.Optional("ignored"): cv.boolean,
     }
 )
 REMOVE_SCHEMA = vol.Schema({vol.Required("plate"): cv.string})
+OBSERVATION_SCHEMA = vol.Schema(
+    {
+        vol.Required("plate"): cv.string,
+        vol.Required("event_id"): cv.string,
+        vol.Required("timestamp"): cv.string,
+        vol.Optional("camera", default=""): cv.string,
+        vol.Optional("score"): vol.Coerce(float),
+    }
+)
+REMOVE_OBSERVATION_SCHEMA = vol.Schema(
+    {vol.Required("plate"): cv.string, vol.Required("event_id"): cv.string}
+)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -> bool:
@@ -120,6 +136,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -
             call.data["category"],
             notes=call.data.get("notes"),
             vehicle=vehicle or None,
+            ignored=call.data.get("ignored"),
         )
 
     async def remove_metadata(call: ServiceCall) -> None:
@@ -131,9 +148,39 @@ async def async_setup_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -
         except ValueError as err:
             raise HomeAssistantError(str(err)) from err
 
+    async def update_observation(call: ServiceCall) -> None:
+        timestamp = dt_util.parse_datetime(call.data["timestamp"])
+        if timestamp is None:
+            raise HomeAssistantError("Invalid passage timestamp")
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+        if not await manager.async_update_observation(
+            call.data["plate"],
+            call.data["event_id"],
+            timestamp,
+            call.data.get("camera", ""),
+            call.data.get("score"),
+        ):
+            raise HomeAssistantError("Passage not found")
+
+    async def remove_observation(call: ServiceCall) -> None:
+        if not await manager.async_remove_observation(
+            call.data["plate"], call.data["event_id"]
+        ):
+            raise HomeAssistantError("Passage not found")
+
     hass.services.async_register(DOMAIN, SERVICE_SET_PLATE, set_plate, schema=SET_PLATE_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_REMOVE_PLATE_METADATA, remove_metadata, schema=REMOVE_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_LOOKUP_VEHICLE, lookup_vehicle, schema=REMOVE_SCHEMA)
+    hass.services.async_register(
+        DOMAIN, SERVICE_UPDATE_OBSERVATION, update_observation, schema=OBSERVATION_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_REMOVE_OBSERVATION,
+        remove_observation,
+        schema=REMOVE_OBSERVATION_SCHEMA,
+    )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     return True
@@ -147,6 +194,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) 
         hass.services.async_remove(DOMAIN, SERVICE_SET_PLATE)
         hass.services.async_remove(DOMAIN, SERVICE_REMOVE_PLATE_METADATA)
         hass.services.async_remove(DOMAIN, SERVICE_LOOKUP_VEHICLE)
+        hass.services.async_remove(DOMAIN, SERVICE_UPDATE_OBSERVATION)
+        hass.services.async_remove(DOMAIN, SERVICE_REMOVE_OBSERVATION)
         frontend.remove_extra_js_url(hass, CARD_URL)
     return unloaded
 

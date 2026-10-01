@@ -189,6 +189,7 @@ class FrigateLPROptionsFlow(config_entries.OptionsFlow):
                     "fuel_type": user_input.get("fuel_type", ""),
                     "type": user_input.get("vehicle_type", ""),
                 },
+                ignored=user_input.get("ignored", False),
             )
             return self.async_create_entry(title="", data=dict(self.config_entry.options))
         return self.async_show_form(
@@ -210,6 +211,7 @@ class FrigateLPROptionsFlow(config_entries.OptionsFlow):
                     vol.Optional("chassis_type", default=""): str,
                     vol.Optional("fuel_type", default=""): str,
                     vol.Optional("vehicle_type", default=""): str,
+                    vol.Required("ignored", default=False): BooleanSelector(),
                 }
             ),
         )

@@ -24,6 +24,9 @@ observationshistorikken.
 - Medfølgende Lovelace-kort, som kan vælges og konfigureres direkte i dashboard-editoren.
 - Forklarlig mønsteranalyse med tidsklynger, ugedage, besøgsrytme, udvikling og sikkerhedsgrad.
 - Valgfrit permanent snapshot af den seneste passage på hver køretøjssag.
+- Redigering og sletning af enkelte passager med automatisk genberegning af statistikken.
+- Køretøjssager kan ignoreres i oversigter og samlet trafikstatistik uden at blive slettet.
+- Særskilt trafikvisning med time-, ugedags- og kategorifordeling.
 - Valgfrit MotorAPI-opslag af mærke, model og andre grunddata for helt nye, ukendte plader.
 - Plader, som brugeren har navngivet eller markeret som Egen, Kendt eller Uønsket, sendes aldrig automatisk til MotorAPI.
 
@@ -128,8 +131,9 @@ Der skal ikke kopieres YAML eller oprettes en Lovelace-resource manuelt. Integra
 registrerer selv kortets modul i Home Assistants Lovelace-resource-lager. Kortet finder
 automatisk integrationens entiteter. På brede kort vises en søgbar og sorterbar
 køretøjsliste, den valgte køretøjssag med statistik og grafer samt en fast kolonne
-med de seneste passager. På telefon bruges fanerne **Seneste**, **Køretøjer** og
-**Detaljer**, så ingen desktop-tabel presses sammen eller kræver vandret rulning.
+med de seneste passager. På telefon bruges fanerne **Seneste**, **Køretøjer**,
+**Detaljer** og **Trafik**, så ingen desktop-tabel presses sammen eller kræver
+vandret rulning.
 
 Kategori og bemærkning kan ændres direkte i detaljevisningen. Den fulde editor kan
 oprette og redigere køretøjssager med navn/relation og stamdata. Graferne viser
@@ -140,6 +144,17 @@ hverdags-/weekendtendenser, ugentlig rytme, flere daglige passager og udvikling 
 30-dages perioder uden at gætte på ejer eller tilhørsforhold. Kortets layout reagerer på sin egen bredde via container queries
 og følger Home Assistants aktive lyse eller mørke tema. Oplysningerne gemmes af
 integrationen i Home Assistants persistente lager.
+
+De seneste 50 passager på den valgte køretøjssag kan redigeres eller slettes direkte.
+Ved en rettelse genberegnes første/seneste observation, intervaller, antal dage,
+mønsteranalyse og den samlede trafikstatistik. Sletning er permanent, mens resten af
+køretøjssagen bevares. Markeringen **Ignorér i oversigter** skjuler sagen fra seneste
+passager og trafikstatistik; den kan stadig findes under filteret **Ignorerede sager**.
+
+Visningen **Trafikstatistik** viser passager pr. time og ugedag, de seneste 7 og 30
+dage, gennemsnit pr. dag, travleste tidspunkt samt andelen af kendte inklusive egne,
+ukendte og uønskede passager. Tallene beskriver kun nummerplader, som Frigate faktisk
+har aflæst, og skal derfor ikke forstås som en komplet trafikmåling.
 
 Ved opgradering fra 1.3.1 fjernes det selvstændige **Nummerplader**-dashboard, som
 den version oprettede, automatisk.

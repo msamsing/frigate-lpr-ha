@@ -91,7 +91,8 @@
           "color": "Farve",
           "chassis_type": "Karrosseri",
           "fuel_type": "Drivmiddel",
-          "vehicle_type": "Køretøjstype"
+          "vehicle_type": "Køretøjstype",
+          "ignored": "Ignorér i oversigter og trafikstatistik"
         }
       },
       "remove_plate": {

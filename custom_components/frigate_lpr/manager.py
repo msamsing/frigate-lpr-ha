@@ -150,6 +150,7 @@ class LPRManager:
         *,
         notes: str | None = None,
         vehicle: dict[str, Any] | None = None,
+        ignored: bool | None = None,
     ) -> None:
         is_new = normalize_plate(plate) not in self.registry.plates
         key = self.registry.set_metadata(
@@ -158,11 +159,37 @@ class LPRManager:
             category,
             notes=notes,
             vehicle=vehicle,
+            ignored=ignored,
         )
         await self.store.async_save(self.registry.data)
         if is_new:
             async_dispatcher_send(self.hass, f"{SIGNAL_NEW_PLATE}_{self.entry_id}", key)
         async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
+
+    async def async_update_observation(
+        self,
+        plate: str,
+        event_id: str,
+        timestamp: datetime,
+        camera: str,
+        score: float | None,
+    ) -> bool:
+        """Update one passage persistently."""
+        changed = self.registry.update_observation(
+            plate, event_id, timestamp, camera, score
+        )
+        if changed:
+            await self.store.async_save(self.registry.data)
+            async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
+        return changed
+
+    async def async_remove_observation(self, plate: str, event_id: str) -> bool:
+        """Remove one passage persistently."""
+        changed = self.registry.remove_observation(plate, event_id)
+        if changed:
+            await self.store.async_save(self.registry.data)
+            async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
+        return changed
 
     async def async_remove_metadata(self, plate: str) -> None:
         self.registry.remove_metadata(plate)

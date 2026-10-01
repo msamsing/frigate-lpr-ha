@@ -29,6 +29,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         LPRListSensor(manager, entry.entry_id, "known_local", "Kendte lokale nummerplader"),
         LPRListSensor(manager, entry.entry_id, "frequent_class", "Hyppige nummerplader"),
         LPRListSensor(manager, entry.entry_id, "rare", "Sjældne nummerplader"),
+        LPRTrafficSensor(manager, entry.entry_id),
     ])
     known_entities = set(manager.registry.plates)
     async_add_entities([LPRPlateSensor(manager, entry.entry_id, plate) for plate in known_entities])
@@ -150,4 +151,28 @@ class LPRPlateSensor(LPRBaseSensor):
             "vehicle_lookup_status": (view.get("vehicle_lookup") or {}).get("status", "not_attempted"),
             "notes": view.get("notes", ""),
             "snapshot": view.get("snapshot"),
+            "ignored": view.get("ignored", False),
+        }
+
+
+class LPRTrafficSensor(LPRBaseSensor):
+    """Expose aggregate traffic statistics for the dashboard."""
+
+    _attr_name = "Trafikstatistik"
+    _attr_icon = "mdi:chart-bar"
+
+    def __init__(self, manager: LPRManager, entry_id: str) -> None:
+        super().__init__(manager, entry_id)
+        self._attr_unique_id = f"{entry_id}_traffic_stats"
+        self._attr_suggested_object_id = "frigate_lpr_traffic_stats"
+
+    @property
+    def native_value(self) -> int:
+        return self.manager.registry.summary(dt_util.now().date().isoformat())["traffic_stats"]["total_passages"]
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "frigate_lpr_view": "traffic_stats",
+            **self.manager.registry.summary(dt_util.now().date().isoformat())["traffic_stats"],
         }

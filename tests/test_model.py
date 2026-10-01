@@ -103,6 +103,45 @@ class LPRRegistryTests(unittest.TestCase):
         self.assertTrue(pattern["primary"].startswith("To tydelige tidspunkter"))
         self.assertIn("Typisk 2 passager på aktive dage", pattern["secondary"])
 
+    def test_passage_can_be_edited_and_deleted(self):
+        registry = LPRRegistry()
+        first = datetime(2026, 9, 1, 8, tzinfo=timezone.utc)
+        changed = first + timedelta(hours=2)
+        registry.observe("EDIT123", first, "event-1", camera="old", score=0.7)
+        registry.observe("EDIT123", first + timedelta(days=1), "event-2", camera="old", score=0.8)
+
+        self.assertTrue(registry.update_observation("EDIT123", "event-1", changed, "new", 0.95))
+        self.assertEqual(registry.plates["EDIT123"]["observations"][0]["camera"], "new")
+        self.assertEqual(registry.plates["EDIT123"]["count"], 2)
+        self.assertTrue(registry.remove_observation("EDIT123", "event-2"))
+        self.assertEqual(registry.plates["EDIT123"]["count"], 1)
+        self.assertEqual(registry.plates["EDIT123"]["event_ids"], ["event-1"])
+
+    def test_ignored_vehicle_is_excluded_from_traffic(self):
+        registry = LPRRegistry()
+        seen = datetime.now(timezone.utc)
+        registry.observe("VISIBLE1", seen, "visible", camera="road")
+        registry.observe("HIDDEN1", seen, "hidden", camera="road")
+        registry.set_metadata("HIDDEN1", "Test", "known", ignored=True)
+        summary = registry.summary(seen.date().isoformat())
+
+        self.assertEqual(summary["observations_today"], 1)
+        self.assertEqual(summary["recent"][0]["plate"], "VISIBLE1")
+        self.assertEqual(summary["traffic_stats"]["total_passages"], 1)
+        self.assertEqual(summary["traffic_stats"]["ignored_vehicles"], 1)
+
+    def test_traffic_category_distribution_counts_passages(self):
+        registry = LPRRegistry()
+        seen = datetime.now(timezone.utc)
+        registry.set_metadata("OWN1", "Egen", "own")
+        registry.set_metadata("BAD1", "Uønsket", "unwanted")
+        for event, plate in enumerate(("OWN1", "OWN1", "UNKNOWN1", "BAD1")):
+            registry.observe(plate, seen + timedelta(minutes=event), str(event), camera="road")
+        traffic = registry.summary(seen.date().isoformat())["traffic_stats"]
+
+        self.assertEqual(traffic["categories"], {"known": 2, "unknown": 1, "unwanted": 1})
+        self.assertEqual(sum(traffic["hour_counts"]), 4)
+
     def test_roundtrip_persistence_and_daily_summary(self):
         registry = LPRRegistry()
         seen = datetime(2026, 9, 26, 12, tzinfo=timezone.utc)

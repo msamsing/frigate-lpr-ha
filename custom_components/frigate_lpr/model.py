@@ -36,6 +36,7 @@ class LPRRegistry:
             record.setdefault("vehicle_source", None)
             record.setdefault("notes", "")
             record.setdefault("snapshot", None)
+            record.setdefault("ignored", False)
         self.frequent_observations = frequent_observations
         self.frequent_days = frequent_days
 
@@ -51,6 +52,7 @@ class LPRRegistry:
         *,
         notes: str | None = None,
         vehicle: dict[str, Any] | None = None,
+        ignored: bool | None = None,
     ) -> str:
         """Add or update user-controlled metadata."""
         key = normalize_plate(plate)
@@ -61,6 +63,8 @@ class LPRRegistry:
         record["category"] = category
         if notes is not None:
             record["notes"] = notes.strip()
+        if ignored is not None:
+            record["ignored"] = ignored
         if vehicle is not None:
             merged_vehicle = dict(record.get("vehicle") or {})
             for field, value in vehicle.items():
@@ -114,24 +118,81 @@ class LPRRegistry:
             "score": score,
         }
         record["observations"].append(observation)
-        if event_id:
-            record["event_ids"].append(event_id)
-        record["observations"].sort(key=lambda item: item["timestamp"])
-        timestamps = [datetime.fromisoformat(item["timestamp"]) for item in record["observations"]]
-        record["intervals_seconds"] = [
-            max(0, int((current - previous).total_seconds()))
-            for previous, current in zip(timestamps, timestamps[1:])
-        ]
-        record["first_seen"] = record["observations"][0]["timestamp"]
-        record["last_seen"] = record["observations"][-1]["timestamp"]
-        record["count"] += 1
-        record["days"] = sorted({item["timestamp"][:10] for item in record["observations"]})
+        self._recalculate_record(record)
         if frigate_name and not record["name"]:
             record["frigate_name"] = frigate_name
 
         self.data["recent"].append({"plate": key, **observation})
         self.data["recent"] = sorted(self.data["recent"], key=lambda item: item["timestamp"], reverse=True)[:100]
         return True
+
+    def update_observation(
+        self,
+        plate: str,
+        event_id: str,
+        timestamp: datetime,
+        camera: str,
+        score: float | None,
+    ) -> bool:
+        """Update one stored passage and all derived values."""
+        key = normalize_plate(plate)
+        record = self.plates.get(key)
+        if record is None:
+            return False
+        observation = next(
+            (item for item in record["observations"] if item.get("event_id") == event_id),
+            None,
+        )
+        if observation is None:
+            return False
+        observation.update(
+            timestamp=timestamp.isoformat(),
+            camera=camera,
+            score=score,
+        )
+        self._recalculate_record(record)
+        for recent in self.data["recent"]:
+            if recent["plate"] == key and recent.get("event_id") == event_id:
+                recent.update(observation)
+        self.data["recent"].sort(key=lambda item: item["timestamp"], reverse=True)
+        return True
+
+    def remove_observation(self, plate: str, event_id: str) -> bool:
+        """Delete one stored passage and all derived values."""
+        key = normalize_plate(plate)
+        record = self.plates.get(key)
+        if record is None:
+            return False
+        before = len(record["observations"])
+        record["observations"] = [
+            item for item in record["observations"] if item.get("event_id") != event_id
+        ]
+        if len(record["observations"]) == before:
+            return False
+        self.data["recent"] = [
+            item
+            for item in self.data["recent"]
+            if not (item["plate"] == key and item.get("event_id") == event_id)
+        ]
+        self._recalculate_record(record)
+        return True
+
+    @staticmethod
+    def _recalculate_record(record: dict[str, Any]) -> None:
+        """Rebuild counters after an observation is added, edited or removed."""
+        record["observations"].sort(key=lambda item: item["timestamp"])
+        timestamps = [datetime.fromisoformat(item["timestamp"]) for item in record["observations"]]
+        record["event_ids"] = [
+            item["event_id"] for item in record["observations"] if item.get("event_id")
+        ]
+        record["intervals_seconds"] = [
+            max(0, int((current - previous).total_seconds()))
+            for previous, current in zip(timestamps, timestamps[1:])
+        ]
+        record["count"] = len(record["observations"])
+        record["first_seen"] = record["observations"][0]["timestamp"] if record["observations"] else None
+        record["last_seen"] = record["observations"][-1]["timestamp"] if record["observations"] else None
+        record["days"] = sorted({item["timestamp"][:10] for item in record["observations"]})
 
     def classification(self, record: dict[str, Any]) -> str:
         """Classify solely from explicit metadata and observable frequency."""
@@ -333,15 +394,18 @@ class LPRRegistry:
             record["vehicle_source"] = "motorapi"
 
     def summary(self, today: str) -> dict[str, Any]:
+        visible_plates = {
+            plate: record for plate, record in self.plates.items() if not record.get("ignored")
+        }
         plates_today = {
             plate
-            for plate, record in self.plates.items()
+            for plate, record in visible_plates.items()
             for item in record["observations"]
             if item["timestamp"][:10] == today
         }
         all_today_count = sum(
             1
-            for record in self.plates.values()
+            for record in visible_plates.values()
             for item in record["observations"]
             if item["timestamp"][:10] == today
         )
@@ -355,7 +419,7 @@ class LPRRegistry:
                     "vehicle": record.get("vehicle"),
                     "notes": record.get("notes", ""),
                 }
-                for plate, record in self.plates.items()
+                for plate, record in visible_plates.items()
             ),
             key=lambda item: (-item["count"], item["plate"]),
         )[:10]
@@ -377,7 +441,7 @@ class LPRRegistry:
                 "vehicle": record.get("vehicle"),
                 "notes": record.get("notes", ""),
             }
-            for plate, record in self.plates.items()
+            for plate, record in visible_plates.items()
             if record["count"] == 1
         ]
         classified = {
@@ -392,7 +456,7 @@ class LPRRegistry:
                 "Engangsbesøgende",
             )
         }
-        for plate, record in self.plates.items():
+        for plate, record in visible_plates.items():
             classification = self.classification(record)
             classified[classification].append(
                 {
@@ -419,8 +483,9 @@ class LPRRegistry:
                     "category": self.plates.get(item["plate"], {}).get("category", ""),
                     "classification": self.classification(self.plates[item["plate"]]),
                 }
-                for item in self.data["recent"][:20]
-            ],
+                for item in self.data["recent"]
+                if not self.plates.get(item["plate"], {}).get("ignored")
+            ][:20],
             "frequent": frequent,
             "known": known,
             "one_time": sorted(one_time, key=lambda item: item["last_seen"] or "", reverse=True)[:20],
@@ -430,6 +495,52 @@ class LPRRegistry:
             "rare": classified["Sjælden"],
             "total_unique": len(self.plates),
             "classifications": dict(Counter(self.classification(record) for record in self.plates.values())),
+            "traffic_stats": self._traffic_stats(visible_plates),
+        }
+
+    def _traffic_stats(self, records: dict[str, dict[str, Any]]) -> dict[str, Any]:
+        """Aggregate road traffic from all non-ignored passages."""
+        observations = [
+            (plate, record, item)
+            for plate, record in records.items()
+            for item in record["observations"]
+        ]
+        hour_counts = [0] * 24
+        weekday_counts = [0] * 7
+        categories = {"known": 0, "unknown": 0, "unwanted": 0}
+        timestamps: list[datetime] = []
+        for _plate, record, item in observations:
+            stamp = datetime.fromisoformat(item["timestamp"])
+            timestamps.append(stamp)
+            hour_counts[stamp.hour] += 1
+            weekday_counts[stamp.weekday()] += 1
+            classification = self.classification(record)
+            if classification in {"Egen", "Kendt lokal"}:
+                categories["known"] += 1
+            elif classification == "Uønsket":
+                categories["unwanted"] += 1
+            else:
+                categories["unknown"] += 1
+        now = datetime.now((timestamps[-1].tzinfo if timestamps else None) or timezone.utc)
+        recent_7 = sum(stamp >= now - timedelta(days=7) for stamp in timestamps)
+        recent_30 = sum(stamp >= now - timedelta(days=30) for stamp in timestamps)
+        today = sum(stamp.date() == now.date() for stamp in timestamps)
+        total = len(observations)
+        busiest_hour = max(range(24), key=lambda hour: hour_counts[hour]) if total else None
+        busiest_weekday = max(range(7), key=lambda day: weekday_counts[day]) if total else None
+        return {
+            "total_passages": total,
+            "unique_vehicles": len(records),
+            "today": today,
+            "last_7_days": recent_7,
+            "last_30_days": recent_30,
+            "daily_average_30": round(recent_30 / 30, 1),
+            "hour_counts": hour_counts,
+            "weekday_counts": weekday_counts,
+            "categories": categories,
+            "busiest_hour": busiest_hour,
+            "busiest_weekday": busiest_weekday,
+            "ignored_vehicles": sum(record.get("ignored", False) for record in self.plates.values()),
         }
 
     @staticmethod
@@ -451,4 +562,5 @@ class LPRRegistry:
             "vehicle_source": None,
             "notes": "",
             "snapshot": None,
+            "ignored": False,
         }

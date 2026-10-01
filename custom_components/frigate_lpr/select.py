@@ -96,6 +96,7 @@ class LPRPlateSelect(SelectEntity):
             "vehicle_lookup_status": (view.get("vehicle_lookup") or {}).get("status", "not_attempted"),
             "notes": view.get("notes", ""),
             "snapshot": view.get("snapshot"),
+            "ignored": view.get("ignored", False),
         }
 
     async def async_added_to_hass(self) -> None:

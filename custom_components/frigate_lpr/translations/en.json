@@ -99,7 +99,8 @@
           "color": "Color",
           "chassis_type": "Body style",
           "fuel_type": "Fuel type",
-          "vehicle_type": "Vehicle type"
+          "vehicle_type": "Vehicle type",
+          "ignored": "Ignore in overviews and traffic statistics"
         }
       },
       "remove_plate": {
