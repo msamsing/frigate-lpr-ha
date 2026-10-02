@@ -50,6 +50,8 @@ class LPRManager:
         self.motorapi_key = motorapi_key
         self.snapshots_enabled = snapshots_enabled
         self.snapshot_entity = snapshot_entity
+        self._snapshot_generations: dict[str, int] = {}
+        self._snapshot_lock = asyncio.Lock()
         self.snapshot_dir = Path(hass.config.path(".storage", "frigate_lpr_snapshots"))
         self.store = Store(hass, STORAGE_VERSION, f"frigate_lpr.{entry_id}")
         self.registry = LPRRegistry(frequent_observations=frequent_observations, frequent_days=frequent_days)
@@ -131,6 +133,7 @@ class LPRManager:
                         normalized_plate,
                         str(payload.get("id", "")),
                         str(payload.get("camera", "")),
+                        self._snapshot_generations.get(normalized_plate, 0),
                     ),
                     "Frigate LPR image entity snapshot",
                 )
@@ -265,7 +268,9 @@ class LPRManager:
         async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
         return result
 
-    async def _async_store_snapshot(self, plate: str, event_id: str, camera: str) -> None:
+    async def _async_store_snapshot(
+        self, plate: str, event_id: str, camera: str, generation: int
+    ) -> None:
         """Copy the current image entity content and retain it on one case."""
         image_bytes: bytes | None = None
         content_type = "image/jpeg"
@@ -279,25 +284,49 @@ class LPRManager:
                     break
             except (HomeAssistantError, KeyError, TimeoutError):
                 continue
+        if not image_bytes or len(image_bytes) > 8 * 1024 * 1024:
+            _LOGGER.warning("Snapshot image entity was unavailable, empty or oversized")
+            return
         try:
-            if not image_bytes or len(image_bytes) > 8 * 1024 * 1024:
-                _LOGGER.warning("Snapshot image entity was unavailable, empty or oversized")
-                return
-            await self.hass.async_add_executor_job(self._write_snapshot, plate, image_bytes)
-            record = self.registry.plates.get(plate)
-            if record is None:
-                return
-            record["snapshot"] = {
-                "event_id": event_id,
-                "captured_at": dt_util.utcnow().isoformat(),
-                "camera": camera,
-                "source_entity": self.snapshot_entity,
-                "content_type": content_type,
-            }
-            await self.store.async_save(self.registry.data)
-            async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
+            async with self._snapshot_lock:
+                if self._snapshot_generations.get(plate, 0) != generation:
+                    return
+                await self.hass.async_add_executor_job(self._write_snapshot, plate, image_bytes)
+                record = self.registry.plates.get(plate)
+                if record is None:
+                    return
+                record["snapshot"] = {
+                    "event_id": event_id,
+                    "captured_at": dt_util.utcnow().isoformat(),
+                    "camera": camera,
+                    "source_entity": self.snapshot_entity,
+                    "content_type": content_type,
+                }
+                await self.store.async_save(self.registry.data)
+                async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
         except OSError:
             _LOGGER.warning("Unable to store snapshot from image entity", exc_info=True)
+
+    async def async_remove_snapshot(self, plate: str) -> bool:
+        """Remove the retained image without changing the vehicle history."""
+        normalized = normalize_plate(plate)
+        record = self.registry.plates.get(normalized)
+        if record is None:
+            return False
+        self._snapshot_generations[normalized] = self._snapshot_generations.get(normalized, 0) + 1
+        async with self._snapshot_lock:
+            await self.hass.async_add_executor_job(self._remove_snapshot_files, normalized)
+            record["snapshot"] = None
+            await self.store.async_save(self.registry.data)
+            async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
+        return True
+
+    def _remove_snapshot_files(self, plate: str) -> None:
+        """Remove current and legacy snapshot files outside the event loop."""
+        for suffix in (".img", ".jpg"):
+            path = self.snapshot_dir / f"{plate}{suffix}"
+            if path.is_file():
+                path.unlink()
 
     def _write_snapshot(self, plate: str, image: bytes) -> None:
         """Write a snapshot atomically outside the event loop."""

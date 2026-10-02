@@ -110,6 +110,13 @@ en anden bil; den erstattes først ved næste passage for samme nummerplade. Bil
 udleveres kun gennem et autentificeret Home Assistant-endpoint og kan åbnes i stor
 størrelse fra køretøjssagen.
 
+Knappen **Slet billede** på køretøjssagen fjerner kun den lokale billedfil og
+billedreferencen. Passagehistorik, statistik og stamdata bevares. Et nyt billede
+gemmes først, når den samme nummerplade registreres ved en senere passage. Det er
+især nyttigt, hvis to næsten samtidige passager har fået knyttet det samme billede
+til begge sager. En igangværende billedhentning annulleres logisk, så den ikke kan
+genskabe billedet umiddelbart efter sletningen.
+
 Frigate sender LPR som `type: lpr` med felterne `id`, `plate`, `camera`, `score` og
 `timestamp`. Andre meddelelsestyper ignoreres. Kameraer filtreres kun, hvis brugeren vælger det.
 

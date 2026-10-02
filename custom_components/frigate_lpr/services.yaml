@@ -141,3 +141,12 @@ remove_observation:
       required: true
       selector:
         text:
+remove_snapshot:
+  name: Slet gemt køretøjsbillede
+  description: Fjern det lokale billede fra køretøjssagen. Et nyt billede gemmes først ved køretøjets næste passage.
+  fields:
+    plate:
+      name: Nummerplade
+      required: true
+      selector:
+        text:

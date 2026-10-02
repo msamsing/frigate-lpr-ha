@@ -39,6 +39,7 @@ from .const import (
     SERVICE_REMOVE_PLATE_METADATA,
     SERVICE_LOOKUP_VEHICLE,
     SERVICE_REMOVE_OBSERVATION,
+    SERVICE_REMOVE_SNAPSHOT,
     SERVICE_SET_PLATE,
     SERVICE_UPDATE_OBSERVATION,
     SNAPSHOT_API_PATH,
@@ -164,6 +165,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -
         ):
             raise HomeAssistantError("Passage not found")
 
+    async def remove_snapshot(call: ServiceCall) -> None:
+        if not await manager.async_remove_snapshot(call.data["plate"]):
+            raise HomeAssistantError("Vehicle case not found")
+
     hass.services.async_register(DOMAIN, SERVICE_SET_PLATE, set_plate, schema=SET_PLATE_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_REMOVE_PLATE_METADATA, remove_metadata, schema=REMOVE_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_LOOKUP_VEHICLE, lookup_vehicle, schema=REMOVE_SCHEMA)
@@ -175,6 +180,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -
         SERVICE_REMOVE_OBSERVATION,
         remove_observation,
         schema=REMOVE_OBSERVATION_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_REMOVE_SNAPSHOT, remove_snapshot, schema=REMOVE_SCHEMA
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
@@ -191,6 +199,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) 
         hass.services.async_remove(DOMAIN, SERVICE_LOOKUP_VEHICLE)
         hass.services.async_remove(DOMAIN, SERVICE_UPDATE_OBSERVATION)
         hass.services.async_remove(DOMAIN, SERVICE_REMOVE_OBSERVATION)
+        hass.services.async_remove(DOMAIN, SERVICE_REMOVE_SNAPSHOT)
         frontend.remove_extra_js_url(hass, CARD_URL)
     return unloaded
 

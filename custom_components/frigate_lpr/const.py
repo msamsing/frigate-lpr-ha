@@ -3,7 +3,7 @@
 DOMAIN = "frigate_lpr"
 PLATFORMS = ["sensor", "select"]
 CARD_RESOURCE_PATH = "/frigate_lpr/frigate-lpr-card.js"
-CARD_URL = f"{CARD_RESOURCE_PATH}?v=1.9.0"
+CARD_URL = f"{CARD_RESOURCE_PATH}?v=1.9.1"
 STATIC_URL_PATH = "/frigate_lpr"
 
 CONF_TOPIC = "topic"
@@ -33,3 +33,4 @@ SERVICE_REMOVE_PLATE_METADATA = "remove_plate_metadata"
 SERVICE_LOOKUP_VEHICLE = "lookup_vehicle"
 SERVICE_UPDATE_OBSERVATION = "update_observation"
 SERVICE_REMOVE_OBSERVATION = "remove_observation"
+SERVICE_REMOVE_SNAPSHOT = "remove_snapshot"
