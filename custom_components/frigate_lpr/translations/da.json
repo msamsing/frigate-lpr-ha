@@ -32,6 +32,7 @@
           "classification": "Klassifikationsgrænser",
           "vehicle_lookup": "Køretøjsopslag via MotorAPI",
           "snapshots": "Snapshot fra billedentitet",
+          "speed": "Hastighed fra Frigate",
           "add_plate": "Tilføj eller opdater kendt nummerplade",
           "remove_plate": "Fjern navn og kategori"
         },
@@ -39,6 +40,7 @@
           "classification": "Bestem hvornår en observeret plade klassificeres som Hyppig.",
           "vehicle_lookup": "Aktivér valgfrit opslag af bildata for helt nye, ukendte plader.",
           "snapshots": "Vælg en image-entitet og gem dens aktuelle billede lokalt ved hver passage.",
+          "speed": "Knyt Frigates estimerede hastighed til hver passage og vælg en vejledende fartgrænse.",
           "add_plate": "Opret eller rediger en lokal køretøjssag med navn, kategori og bildata.",
           "remove_plate": "Fjern brugerdata fra en plade uden at slette observationshistorikken."
         }
@@ -70,6 +72,21 @@
         },
         "data_description": {
           "snapshot_entity": "Eksempelvis Frigates image-entitet for det kamera eller objekt, som leverer passagebilledet."
+        }
+      },
+      "speed": {
+        "title": "Hastighed fra Frigate",
+        "description": "Frigate sender hastighed på events-emnet. Integrationen kobler målingen til nummerpladen via event-id. Vælg samme enhedssystem som i Frigate. Hastigheden er et kameraestimat og ikke en myndighedsgodkendt måling.",
+        "data": {
+          "speed_enabled": "Registrér hastigheder",
+          "events_topic": "Frigate events-emne",
+          "speed_unit": "Enhed fra Frigate",
+          "speed_limit": "Vejledende fartgrænse (km/t)"
+        },
+        "data_description": {
+          "events_topic": "Normalt frigate/events. Ret kun emnet, hvis MQTT-præfikset er ændret.",
+          "speed_unit": "Vælg kmh ved metrisk Frigate-konfiguration eller mph ved imperial. mph omregnes og gemmes som km/t.",
+          "speed_limit": "Bruges alene til markering og statistik i dashboardet."
         }
       },
       "add_plate": {

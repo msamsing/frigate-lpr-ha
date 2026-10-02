@@ -29,11 +29,19 @@ from .const import (
     CONF_MOTORAPI_KEY,
     CONF_SNAPSHOTS_ENABLED,
     CONF_SNAPSHOT_ENTITY,
+    CONF_SPEED_ENABLED,
+    CONF_EVENTS_TOPIC,
+    CONF_SPEED_LIMIT,
+    CONF_SPEED_UNIT,
     CONF_TOPIC,
     DEFAULT_FREQUENT_DAYS,
     DEFAULT_FREQUENT_OBSERVATIONS,
     DEFAULT_MOTORAPI_ENABLED,
     DEFAULT_SNAPSHOTS_ENABLED,
+    DEFAULT_SPEED_ENABLED,
+    DEFAULT_EVENTS_TOPIC,
+    DEFAULT_SPEED_LIMIT,
+    DEFAULT_SPEED_UNIT,
     DOMAIN,
     PLATFORMS,
     SERVICE_REMOVE_PLATE_METADATA,
@@ -80,6 +88,7 @@ OBSERVATION_SCHEMA = vol.Schema(
         vol.Required("timestamp"): cv.string,
         vol.Optional("camera", default=""): cv.string,
         vol.Optional("score"): vol.Coerce(float),
+        vol.Optional("speed_kmh"): vol.Coerce(float),
     }
 )
 REMOVE_OBSERVATION_SCHEMA = vol.Schema(
@@ -101,6 +110,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -
         entry.options.get(CONF_MOTORAPI_KEY, ""),
         entry.options.get(CONF_SNAPSHOTS_ENABLED, DEFAULT_SNAPSHOTS_ENABLED),
         entry.options.get(CONF_SNAPSHOT_ENTITY, ""),
+        entry.options.get(CONF_SPEED_ENABLED, DEFAULT_SPEED_ENABLED),
+        entry.options.get(CONF_EVENTS_TOPIC, DEFAULT_EVENTS_TOPIC),
+        entry.options.get(CONF_SPEED_UNIT, DEFAULT_SPEED_UNIT),
+        entry.options.get(CONF_SPEED_LIMIT, DEFAULT_SPEED_LIMIT),
     )
     await manager.async_setup()
     entry.runtime_data = manager
@@ -156,6 +169,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -
             timestamp,
             call.data.get("camera", ""),
             call.data.get("score"),
+            call.data.get("speed_kmh"),
         ):
             raise HomeAssistantError("Passage not found")
 

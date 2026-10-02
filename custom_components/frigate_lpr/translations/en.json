@@ -40,6 +40,7 @@
           "classification": "Classification thresholds",
           "vehicle_lookup": "Vehicle lookup via MotorAPI",
           "snapshots": "Snapshot from image entity",
+          "speed": "Speed from Frigate",
           "add_plate": "Add or update a known license plate",
           "remove_plate": "Remove name and category"
         },
@@ -47,6 +48,7 @@
           "classification": "Choose when an observed plate is classified as Frequent.",
           "vehicle_lookup": "Enable optional vehicle data lookup for brand-new unknown plates.",
           "snapshots": "Select an image entity and copy its current image locally for each passage.",
+          "speed": "Attach Frigate's estimated speed to passages and choose an advisory speed limit.",
           "add_plate": "Create or edit a local vehicle case with name, category and vehicle data.",
           "remove_plate": "Remove user data from a plate without deleting its observation history."
         }
@@ -78,6 +80,21 @@
         },
         "data_description": {
           "snapshot_entity": "For example, Frigate's image entity for the camera or object providing the passage image."
+        }
+      },
+      "speed": {
+        "title": "Speed from Frigate",
+        "description": "Frigate publishes speed on the events topic. The integration matches it to the plate by event id. Select the same unit system as Frigate. Camera speed is an estimate, not an enforcement-grade measurement.",
+        "data": {
+          "speed_enabled": "Record speeds",
+          "events_topic": "Frigate events topic",
+          "speed_unit": "Unit received from Frigate",
+          "speed_limit": "Advisory speed limit (km/h)"
+        },
+        "data_description": {
+          "events_topic": "Usually frigate/events. Change it only when the MQTT prefix differs.",
+          "speed_unit": "Choose kmh for metric Frigate or mph for imperial. mph is converted and stored as km/h.",
+          "speed_limit": "Used only for dashboard highlighting and statistics."
         }
       },
       "add_plate": {

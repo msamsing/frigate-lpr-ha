@@ -3,7 +3,7 @@
 DOMAIN = "frigate_lpr"
 PLATFORMS = ["sensor", "select"]
 CARD_RESOURCE_PATH = "/frigate_lpr/frigate-lpr-card.js"
-CARD_URL = f"{CARD_RESOURCE_PATH}?v=1.9.1"
+CARD_URL = f"{CARD_RESOURCE_PATH}?v=1.10.0"
 STATIC_URL_PATH = "/frigate_lpr"
 
 CONF_TOPIC = "topic"
@@ -14,12 +14,20 @@ CONF_MOTORAPI_ENABLED = "motorapi_enabled"
 CONF_MOTORAPI_KEY = "motorapi_key"
 CONF_SNAPSHOTS_ENABLED = "snapshots_enabled"
 CONF_SNAPSHOT_ENTITY = "snapshot_entity"
+CONF_SPEED_ENABLED = "speed_enabled"
+CONF_EVENTS_TOPIC = "events_topic"
+CONF_SPEED_LIMIT = "speed_limit"
+CONF_SPEED_UNIT = "speed_unit"
 
 DEFAULT_TOPIC = "frigate/tracked_object_update"
 DEFAULT_FREQUENT_OBSERVATIONS = 10
 DEFAULT_FREQUENT_DAYS = 4
 DEFAULT_MOTORAPI_ENABLED = False
 DEFAULT_SNAPSHOTS_ENABLED = False
+DEFAULT_SPEED_ENABLED = True
+DEFAULT_EVENTS_TOPIC = "frigate/events"
+DEFAULT_SPEED_LIMIT = 50
+DEFAULT_SPEED_UNIT = "kmh"
 
 SNAPSHOT_API_PATH = "/api/frigate_lpr/snapshot/{plate}"
 

@@ -25,11 +25,19 @@ from .const import (
     CONF_MOTORAPI_KEY,
     CONF_SNAPSHOTS_ENABLED,
     CONF_SNAPSHOT_ENTITY,
+    CONF_SPEED_ENABLED,
+    CONF_EVENTS_TOPIC,
+    CONF_SPEED_LIMIT,
+    CONF_SPEED_UNIT,
     CONF_TOPIC,
     DEFAULT_FREQUENT_DAYS,
     DEFAULT_FREQUENT_OBSERVATIONS,
     DEFAULT_MOTORAPI_ENABLED,
     DEFAULT_SNAPSHOTS_ENABLED,
+    DEFAULT_SPEED_ENABLED,
+    DEFAULT_EVENTS_TOPIC,
+    DEFAULT_SPEED_LIMIT,
+    DEFAULT_SPEED_UNIT,
     DEFAULT_TOPIC,
     DOMAIN,
 )
@@ -79,7 +87,7 @@ class FrigateLPROptionsFlow(config_entries.OptionsFlow):
         """Show the settings menu."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["classification", "vehicle_lookup", "snapshots", "add_plate", "remove_plate"],
+            menu_options=["classification", "vehicle_lookup", "snapshots", "speed", "add_plate", "remove_plate"],
         )
 
     async def async_step_classification(self, user_input: dict[str, Any] | None = None) -> FlowResult:
@@ -157,6 +165,36 @@ class FrigateLPROptionsFlow(config_entries.OptionsFlow):
                         CONF_SNAPSHOT_ENTITY,
                         default=self.config_entry.options.get(CONF_SNAPSHOT_ENTITY, ""),
                     ): EntitySelector(EntitySelectorConfig(domain="image")),
+                }
+            ),
+        )
+
+    async def async_step_speed(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Configure Frigate speed event matching."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title="", data={**self.config_entry.options, **user_input}
+            )
+        return self.async_show_form(
+            step_id="speed",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_SPEED_ENABLED,
+                        default=self.config_entry.options.get(CONF_SPEED_ENABLED, DEFAULT_SPEED_ENABLED),
+                    ): BooleanSelector(),
+                    vol.Required(
+                        CONF_EVENTS_TOPIC,
+                        default=self.config_entry.options.get(CONF_EVENTS_TOPIC, DEFAULT_EVENTS_TOPIC),
+                    ): str,
+                    vol.Required(
+                        CONF_SPEED_UNIT,
+                        default=self.config_entry.options.get(CONF_SPEED_UNIT, DEFAULT_SPEED_UNIT),
+                    ): vol.In(["kmh", "mph"]),
+                    vol.Required(
+                        CONF_SPEED_LIMIT,
+                        default=self.config_entry.options.get(CONF_SPEED_LIMIT, DEFAULT_SPEED_LIMIT),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=1, max=300)),
                 }
             ),
         )

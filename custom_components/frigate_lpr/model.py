@@ -37,6 +37,9 @@ class LPRRegistry:
             record.setdefault("notes", "")
             record.setdefault("snapshot", None)
             record.setdefault("ignored", False)
+            for observation in record.get("observations", []):
+                observation.setdefault("speed_kmh", None)
+                observation.setdefault("velocity_angle", None)
         self.frequent_observations = frequent_observations
         self.frequent_days = frequent_days
 
@@ -101,6 +104,8 @@ class LPRRegistry:
         camera: str,
         score: float | None = None,
         frigate_name: str | None = None,
+        speed_kmh: float | None = None,
+        velocity_angle: float | None = None,
     ) -> bool:
         """Record one distinct Frigate vehicle event; return whether it was new."""
         key = normalize_plate(plate)
@@ -116,6 +121,8 @@ class LPRRegistry:
             "event_id": event_id,
             "camera": camera,
             "score": score,
+            "speed_kmh": speed_kmh,
+            "velocity_angle": velocity_angle,
         }
         record["observations"].append(observation)
         self._recalculate_record(record)
@@ -126,6 +133,43 @@ class LPRRegistry:
         self.data["recent"] = sorted(self.data["recent"], key=lambda item: item["timestamp"], reverse=True)[:100]
         return True
 
+    def set_observation_speed(
+        self,
+        event_id: str,
+        speed_kmh: float,
+        velocity_angle: float | None = None,
+    ) -> bool:
+        """Attach Frigate speed data to an existing passage by event id."""
+        if not event_id or not math.isfinite(speed_kmh) or speed_kmh <= 0:
+            return False
+        for record in self.plates.values():
+            observation = next(
+                (item for item in record["observations"] if item.get("event_id") == event_id),
+                None,
+            )
+            if observation is None:
+                continue
+            rounded_speed = round(speed_kmh, 1)
+            rounded_angle = (
+                round(velocity_angle, 1)
+                if velocity_angle is not None and math.isfinite(velocity_angle)
+                else None
+            )
+            changed = (
+                observation.get("speed_kmh") != rounded_speed
+                or observation.get("velocity_angle") != rounded_angle
+            )
+            observation["speed_kmh"] = rounded_speed
+            observation["velocity_angle"] = rounded_angle
+            for recent in self.data["recent"]:
+                if recent.get("event_id") == event_id:
+                    recent.update(
+                        speed_kmh=observation["speed_kmh"],
+                        velocity_angle=observation["velocity_angle"],
+                    )
+            return changed
+        return False
+
     def update_observation(
         self,
         plate: str,
@@ -133,6 +177,7 @@ class LPRRegistry:
         timestamp: datetime,
         camera: str,
         score: float | None,
+        speed_kmh: float | None = None,
     ) -> bool:
         """Update one stored passage and all derived values."""
         key = normalize_plate(plate)
@@ -150,6 +195,8 @@ class LPRRegistry:
             camera=camera,
             score=score,
         )
+        if speed_kmh is not None:
+            observation["speed_kmh"] = round(speed_kmh, 1) if speed_kmh > 0 else None
         self._recalculate_record(record)
         for recent in self.data["recent"]:
             if recent["plate"] == key and recent.get("event_id") == event_id:
@@ -225,6 +272,18 @@ class LPRRegistry:
             "average_interval_hours": round(sum(intervals) / len(intervals) / 3600, 1) if intervals else None,
             "time_stats": self._time_stats(record["observations"]),
             "pattern": self._pattern_analysis(record["observations"]),
+            "speed_stats": self._speed_stats(record["observations"]),
+        }
+
+    @staticmethod
+    def _speed_stats(observations: list[dict[str, Any]]) -> dict[str, Any]:
+        speeds = [float(item["speed_kmh"]) for item in observations if item.get("speed_kmh") is not None]
+        return {
+            "measured_passages": len(speeds),
+            "average_kmh": round(sum(speeds) / len(speeds), 1) if speeds else None,
+            "maximum_kmh": round(max(speeds), 1) if speeds else None,
+            "minimum_kmh": round(min(speeds), 1) if speeds else None,
+            "latest_kmh": round(speeds[-1], 1) if speeds else None,
         }
 
     @staticmethod
@@ -509,9 +568,12 @@ class LPRRegistry:
         weekday_counts = [0] * 7
         categories = {"known": 0, "unknown": 0, "unwanted": 0}
         timestamps: list[datetime] = []
+        measured_speeds: list[tuple[str, datetime, float]] = []
         for _plate, record, item in observations:
             stamp = datetime.fromisoformat(item["timestamp"])
             timestamps.append(stamp)
+            if item.get("speed_kmh") is not None:
+                measured_speeds.append((item.get("plate", _plate), stamp, float(item["speed_kmh"])))
             hour_counts[stamp.hour] += 1
             weekday_counts[stamp.weekday()] += 1
             classification = self.classification(record)
@@ -528,6 +590,8 @@ class LPRRegistry:
         total = len(observations)
         busiest_hour = max(range(24), key=lambda hour: hour_counts[hour]) if total else None
         busiest_weekday = max(range(7), key=lambda day: weekday_counts[day]) if total else None
+        speed_values = [speed for _plate, _stamp, speed in measured_speeds]
+        fastest = sorted(measured_speeds, key=lambda item: item[2], reverse=True)[:10]
         return {
             "total_passages": total,
             "unique_vehicles": len(records),
@@ -541,6 +605,15 @@ class LPRRegistry:
             "busiest_hour": busiest_hour,
             "busiest_weekday": busiest_weekday,
             "ignored_vehicles": sum(record.get("ignored", False) for record in self.plates.values()),
+            "speed": {
+                "measured_passages": len(speed_values),
+                "average_kmh": round(sum(speed_values) / len(speed_values), 1) if speed_values else None,
+                "maximum_kmh": round(max(speed_values), 1) if speed_values else None,
+                "fastest_passages": [
+                    {"plate": plate, "timestamp": stamp.isoformat(), "speed_kmh": round(speed, 1)}
+                    for plate, stamp, speed in fastest
+                ],
+            },
         }
 
     @staticmethod

@@ -27,6 +27,8 @@ observationshistorikken.
 - Redigering og sletning af enkelte passager med automatisk genberegning af statistikken.
 - Køretøjssager kan ignoreres i oversigter og samlet trafikstatistik uden at blive slettet.
 - Særskilt trafikvisning med time-, ugedags- og kategorifordeling.
+- Permanent hastighed pr. passage ved sammenkobling af `frigate/events` og LPR-beskeden via Frigate event-id.
+- Hastighedsstatistik pr. køretøj samt gennemsnit, højeste målinger og hurtigste passager i trafikvisningen.
 - Valgfrit MotorAPI-opslag af mærke, model og andre grunddata for helt nye, ukendte plader.
 - Plader, som brugeren har navngivet eller markeret som Egen, Kendt eller Uønsket, sendes aldrig automatisk til MotorAPI.
 
@@ -120,6 +122,21 @@ genskabe billedet umiddelbart efter sletningen.
 Frigate sender LPR som `type: lpr` med felterne `id`, `plate`, `camera`, `score` og
 `timestamp`. Andre meddelelsestyper ignoreres. Kameraer filtreres kun, hvis brugeren vælger det.
 
+### Hastighed fra Frigate
+
+Under **Indstillinger → Hastighed fra Frigate** kan hastighedsregistreringen slås til
+eller fra. Standardemnet er `frigate/events`. Integrationen bruger
+`after.average_estimated_speed` fra bilens tracking-event og kobler værdien sammen
+med LPR-observationen via det fælles Frigate event-id. Det virker også, når de to
+MQTT-beskeder ankommer i omvendt rækkefølge. Nulværdier efter bilen har forladt
+hastighedszonen overskriver ikke en gyldig måling.
+
+Vælg `kmh`, når Frigate bruger metrisk enhedssystem. Hvis Frigate bruger imperial,
+vælges `mph`, hvorefter integrationen omregner og gemmer værdien som km/t. En
+vejledende fartgrænse kan angives til dashboardets markering og optælling. Frigates
+kamerabaserede hastighed er et estimat og må ikke betragtes som en
+myndighedsgodkendt eller bevismæssig hastighedsmåling.
+
 ## Dashboard
 
 Integrationen indlæser automatisk det medfølgende Lovelace-kort. Den opretter ikke
@@ -160,6 +177,10 @@ Visningen **Trafikstatistik** viser passager pr. time og ugedag, de seneste 7 og
 dage, gennemsnit pr. dag, travleste tidspunkt samt andelen af kendte inklusive egne,
 ukendte og uønskede passager. Tallene beskriver kun nummerplader, som Frigate faktisk
 har aflæst, og skal derfor ikke forstås som en komplet trafikmåling.
+Når hastighed er aktiveret, viser siden desuden antal målte passager,
+gennemsnitshastighed, højeste hastighed, passager over den valgte fartgrænse og en
+klikbar liste over de højeste målinger. Den enkelte køretøjssag viser sit eget
+gennemsnit, maksimum og hastigheden på hver passage.
 
 Ved opgradering fra 1.3.1 fjernes det selvstændige **Nummerplader**-dashboard, som
 den version oprettede, automatisk.

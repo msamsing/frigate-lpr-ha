@@ -72,6 +72,8 @@ class LPRPlateSelect(SelectEntity):
             "motorapi_enabled": bool(
                 self.manager.motorapi_enabled and self.manager.motorapi_key
             ),
+            "speed_enabled": self.manager.speed_enabled,
+            "speed_limit": self.manager.speed_limit,
         }
         plate = self.current_option
         if not plate:
@@ -90,6 +92,7 @@ class LPRPlateSelect(SelectEntity):
             "average_interval_hours": view["average_interval_hours"],
             "time_stats": view["time_stats"],
             "pattern": view["pattern"],
+            "speed_stats": view["speed_stats"],
             "observations": view["observations"][-20:],
             "vehicle": view.get("vehicle"),
             "vehicle_source": view.get("vehicle_source"),

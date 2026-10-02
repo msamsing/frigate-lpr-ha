@@ -98,7 +98,7 @@ lookup_vehicle:
         text:
 update_observation:
   name: Rediger passage
-  description: Ret tidspunkt, kamera eller score på en gemt passage og genberegn statistikken.
+  description: Ret tidspunkt, kamera, score eller hastighed på en gemt passage og genberegn statistikken.
   fields:
     plate:
       name: Nummerplade
@@ -126,6 +126,16 @@ update_observation:
           min: 0
           max: 1
           step: 0.01
+          mode: box
+    speed_kmh:
+      name: Hastighed
+      description: Passagehastighed i km/t. Lad feltet være tomt, hvis passagen ikke har en måling.
+      selector:
+        number:
+          min: 0
+          max: 300
+          step: 0.1
+          unit_of_measurement: km/t
           mode: box
 remove_observation:
   name: Slet passage

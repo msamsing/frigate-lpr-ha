@@ -143,6 +143,7 @@ class LPRPlateSensor(LPRBaseSensor):
             "average_interval_hours": view["average_interval_hours"],
             "time_stats": view["time_stats"],
             "pattern": view["pattern"],
+            "speed_stats": view["speed_stats"],
             "observations": view["observations"][-50:],
             "shown_observations": min(50, view["count"]),
             "stored_observations": view["count"],
@@ -172,7 +173,22 @@ class LPRTrafficSensor(LPRBaseSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        traffic = self.manager.registry.summary(
+            dt_util.now().date().isoformat()
+        )["traffic_stats"]
+        speed = dict(traffic["speed"])
+        speed["over_limit"] = sum(
+            1
+            for record in self.manager.registry.plates.values()
+            if not record.get("ignored")
+            for observation in record["observations"]
+            if observation.get("speed_kmh") is not None
+            and float(observation["speed_kmh"]) > self.manager.speed_limit
+        )
         return {
             "frigate_lpr_view": "traffic_stats",
-            **self.manager.registry.summary(dt_util.now().date().isoformat())["traffic_stats"],
+            "speed_enabled": self.manager.speed_enabled,
+            "speed_limit": self.manager.speed_limit,
+            **traffic,
+            "speed": speed,
         }

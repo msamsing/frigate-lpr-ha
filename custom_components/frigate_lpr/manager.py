@@ -39,6 +39,10 @@ class LPRManager:
         motorapi_key: str = "",
         snapshots_enabled: bool = False,
         snapshot_entity: str = "",
+        speed_enabled: bool = True,
+        events_topic: str = "frigate/events",
+        speed_unit: str = "kmh",
+        speed_limit: float = 50,
     ) -> None:
         self.hass = hass
         self.entry_id = entry_id
@@ -50,12 +54,18 @@ class LPRManager:
         self.motorapi_key = motorapi_key
         self.snapshots_enabled = snapshots_enabled
         self.snapshot_entity = snapshot_entity
+        self.speed_enabled = speed_enabled
+        self.events_topic = events_topic
+        self.speed_unit = speed_unit
+        self.speed_limit = speed_limit
+        self._pending_speeds: dict[str, tuple[float, float | None]] = {}
         self._snapshot_generations: dict[str, int] = {}
         self._snapshot_lock = asyncio.Lock()
         self.snapshot_dir = Path(hass.config.path(".storage", "frigate_lpr_snapshots"))
         self.store = Store(hass, STORAGE_VERSION, f"frigate_lpr.{entry_id}")
         self.registry = LPRRegistry(frequent_observations=frequent_observations, frequent_days=frequent_days)
         self.unsubscribe: Callable[[], None] | None = None
+        self.events_unsubscribe: Callable[[], None] | None = None
 
     async def async_setup(self) -> None:
         stored = await self.store.async_load()
@@ -66,10 +76,16 @@ class LPRManager:
                 frequent_days=self.frequent_days,
             )
         self.unsubscribe = await mqtt.async_subscribe(self.hass, self.topic, self._message_received, qos=0)
+        if self.speed_enabled and self.events_topic:
+            self.events_unsubscribe = await mqtt.async_subscribe(
+                self.hass, self.events_topic, self._events_message_received, qos=0
+            )
 
     async def async_unload(self) -> None:
         if self.unsubscribe:
             self.unsubscribe()
+        if self.events_unsubscribe:
+            self.events_unsubscribe()
         await self.store.async_save(self.registry.data)
 
     @callback
@@ -84,14 +100,18 @@ class LPRManager:
             timestamp = dt_util.as_local(timestamp)
             plate = payload.get("plate", "")
             normalized_plate = normalize_plate(plate)
+            event_id = str(payload.get("id", ""))
+            pending_speed = self._pending_speeds.pop(event_id, None)
             is_new_plate = bool(normalized_plate and normalized_plate not in self.registry.plates)
             changed = self.registry.observe(
                 plate,
                 timestamp,
-                str(payload.get("id", "")),
+                event_id,
                 camera=str(payload.get("camera", "")),
                 score=payload.get("score"),
                 frigate_name=payload.get("name"),
+                speed_kmh=pending_speed[0] if pending_speed else None,
+                velocity_angle=pending_speed[1] if pending_speed else None,
             )
             if not changed:
                 return
@@ -141,6 +161,41 @@ class LPRManager:
         except (ValueError, TypeError, KeyError, json.JSONDecodeError):
             _LOGGER.warning("Ignored invalid Frigate LPR payload", exc_info=True)
 
+    @callback
+    def _events_message_received(self, message: mqtt.ReceiveMessage) -> None:
+        """Receive Frigate tracking updates and attach measured speed by event id."""
+        try:
+            payload = json.loads(message.payload)
+            after = payload.get("after") or {}
+            if after.get("label") != "car":
+                return
+            if self.camera and after.get("camera") != self.camera:
+                return
+            event_id = str(after.get("id") or "")
+            raw_speed = after.get("average_estimated_speed")
+            if not event_id or raw_speed is None:
+                return
+            speed = float(raw_speed)
+            if self.speed_unit == "mph":
+                speed *= 1.609344
+            if speed <= 0:
+                return
+            angle_value = after.get("velocity_angle")
+            angle = float(angle_value) if angle_value is not None else None
+            speed = round(speed, 1)
+            if self.registry.set_observation_speed(event_id, speed, angle):
+                self.store.async_delay_save(lambda: self.registry.data, 5)
+                async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
+                return
+            if any(event_id in record["event_ids"] for record in self.registry.plates.values()):
+                return
+            self._pending_speeds[event_id] = (speed, angle)
+            # Bound memory if events arrive for vehicles whose plates are never read.
+            while len(self._pending_speeds) > 500:
+                self._pending_speeds.pop(next(iter(self._pending_speeds)))
+        except (ValueError, TypeError, json.JSONDecodeError):
+            _LOGGER.warning("Ignored invalid Frigate events payload", exc_info=True)
+
     async def async_set_metadata(
         self,
         plate: str,
@@ -172,10 +227,11 @@ class LPRManager:
         timestamp: datetime,
         camera: str,
         score: float | None,
+        speed_kmh: float | None = None,
     ) -> bool:
         """Update one passage persistently."""
         changed = self.registry.update_observation(
-            plate, event_id, timestamp, camera, score
+            plate, event_id, timestamp, camera, score, speed_kmh
         )
         if changed:
             await self.store.async_save(self.registry.data)

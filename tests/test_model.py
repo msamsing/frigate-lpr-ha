@@ -117,6 +117,31 @@ class LPRRegistryTests(unittest.TestCase):
         self.assertEqual(registry.plates["EDIT123"]["count"], 1)
         self.assertEqual(registry.plates["EDIT123"]["event_ids"], ["event-1"])
 
+    def test_speed_is_attached_by_event_id_and_aggregated(self):
+        registry = LPRRegistry()
+        seen = datetime.now(timezone.utc)
+        registry.observe("FAST123", seen, "event-fast", camera="road")
+        registry.observe("SLOW123", seen + timedelta(minutes=1), "event-slow", camera="road")
+
+        self.assertTrue(registry.set_observation_speed("event-fast", 63.26, 148.04))
+        self.assertTrue(registry.set_observation_speed("event-slow", 22.1))
+        self.assertFalse(registry.set_observation_speed("missing", 50))
+        self.assertFalse(registry.set_observation_speed("event-fast", 0))
+
+        fast = registry.plate_view("FAST123")
+        self.assertEqual(fast["observations"][0]["speed_kmh"], 63.3)
+        self.assertEqual(fast["observations"][0]["velocity_angle"], 148.0)
+        self.assertEqual(fast["speed_stats"]["average_kmh"], 63.3)
+        registry.update_observation("FAST123", "event-fast", seen, "road", 0.9)
+        self.assertEqual(registry.plate_view("FAST123")["speed_stats"]["maximum_kmh"], 63.3)
+        traffic = registry.summary(seen.date().isoformat())["traffic_stats"]["speed"]
+        self.assertEqual(traffic["measured_passages"], 2)
+        self.assertEqual(traffic["average_kmh"], 42.7)
+        self.assertEqual(traffic["fastest_passages"][0]["plate"], "FAST123")
+
+        restored = LPRRegistry(registry.data)
+        self.assertEqual(restored.plate_view("FAST123")["speed_stats"]["maximum_kmh"], 63.3)
+
     def test_ignored_vehicle_is_excluded_from_traffic(self):
         registry = LPRRegistry()
         seen = datetime.now(timezone.utc)
