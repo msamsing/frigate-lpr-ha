@@ -41,6 +41,7 @@
           "vehicle_lookup": "Vehicle lookup via MotorAPI",
           "snapshots": "Snapshot from image entity",
           "speed": "Speed from Frigate",
+          "notifications": "Passage notifications",
           "add_plate": "Add or update a known license plate",
           "remove_plate": "Remove name and category"
         },
@@ -49,6 +50,7 @@
           "vehicle_lookup": "Enable optional vehicle data lookup for brand-new unknown plates.",
           "snapshots": "Select an image entity and copy its current image locally for each passage.",
           "speed": "Attach Frigate's estimated speed to passages and choose an advisory speed limit.",
+          "notifications": "Select up to two Companion App devices and whether alerts should be critical.",
           "add_plate": "Create or edit a local vehicle case with name, category and vehicle data.",
           "remove_plate": "Remove user data from a plate without deleting its observation history."
         }
@@ -113,7 +115,21 @@
           "chassis_type": "Body style",
           "fuel_type": "Fuel type",
           "vehicle_type": "Vehicle type",
-          "ignored": "Ignore in overviews and traffic statistics"
+          "ignored": "Ignore in overviews and traffic statistics",
+          "notify_on_passage": "Notify on every passage",
+          "notify_on_speed": "Notify when speed exceeds the limit"
+        }
+      },
+      "notifications": {
+        "title": "Passage notifications",
+        "description": "Select up to two Home Assistant Companion App devices. Only vehicle cases with 'Notify on every passage' enabled trigger a message. Critical alerts can bypass mute and Focus on iPhone when iOS permission is also enabled.",
+        "data": {
+          "notify_service_1": "First device",
+          "notify_service_2": "Second device",
+          "notify_critical": "Send as critical notification"
+        },
+        "data_description": {
+          "notify_critical": "Plays the default sound at full volume on iPhone, including in mute/Focus, when Critical Alerts are allowed for the Home Assistant app."
         }
       },
       "remove_plate": {

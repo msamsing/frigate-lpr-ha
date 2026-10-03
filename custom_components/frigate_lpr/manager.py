@@ -19,7 +19,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .const import MOTORAPI_URL, SIGNAL_NEW_PLATE, SIGNAL_UPDATE
+from .const import MOTORAPI_URL, SIGNAL_NEW_PLATE, SIGNAL_UPDATE, SNAPSHOT_API_PATH
 from .model import LPRRegistry, normalize_plate
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,6 +43,8 @@ class LPRManager:
         events_topic: str = "frigate/events",
         speed_unit: str = "kmh",
         speed_limit: float = 50,
+        notify_services: tuple[str, ...] = (),
+        notify_critical: bool = False,
     ) -> None:
         self.hass = hass
         self.entry_id = entry_id
@@ -58,6 +60,8 @@ class LPRManager:
         self.events_topic = events_topic
         self.speed_unit = speed_unit
         self.speed_limit = speed_limit
+        self.notify_services = tuple(dict.fromkeys(service for service in notify_services if service))
+        self.notify_critical = notify_critical
         self._pending_speeds: dict[str, tuple[float, float | None]] = {}
         self._snapshot_generations: dict[str, int] = {}
         self._snapshot_lock = asyncio.Lock()
@@ -115,6 +119,26 @@ class LPRManager:
             )
             if not changed:
                 return
+            record = self.registry.plates.get(normalized_plate, {})
+            speeding = bool(pending_speed and pending_speed[0] > self.speed_limit)
+            notify_passage = bool(
+                self.notify_services
+                and (
+                    record.get("notify_on_passage")
+                    or (record.get("notify_on_speed") and speeding)
+                )
+            )
+            if speeding and record.get("notify_on_speed"):
+                observation = next(
+                    (
+                        item
+                        for item in record.get("observations", [])
+                        if item.get("event_id") == event_id
+                    ),
+                    None,
+                )
+                if observation is not None:
+                    observation["speed_notification_sent"] = True
             self.store.async_delay_save(lambda: self.registry.data, 5)
             if is_new_plate:
                 async_dispatcher_send(self.hass, f"{SIGNAL_NEW_PLATE}_{self.entry_id}", normalized_plate)
@@ -143,23 +167,108 @@ class LPRManager:
                         self._async_lookup_vehicle(normalized_plate),
                         "Frigate LPR vehicle lookup",
                     )
-            if (
-                self.snapshots_enabled
-                and self.snapshot_entity
-                and normalized_plate
-            ):
+            capture_snapshot = bool(
+                self.snapshots_enabled and self.snapshot_entity and normalized_plate
+            )
+            if capture_snapshot or notify_passage:
                 self.hass.async_create_task(
-                    self._async_store_snapshot(
+                    self._async_capture_and_notify(
                         normalized_plate,
-                        str(payload.get("id", "")),
+                        event_id,
                         str(payload.get("camera", "")),
+                        timestamp,
+                        pending_speed,
                         self._snapshot_generations.get(normalized_plate, 0),
+                        capture_snapshot,
+                        notify_passage,
+                        speeding,
                     ),
-                    "Frigate LPR image entity snapshot",
+                    "Frigate LPR passage snapshot and notification",
                 )
             async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
         except (ValueError, TypeError, KeyError, json.JSONDecodeError):
             _LOGGER.warning("Ignored invalid Frigate LPR payload", exc_info=True)
+
+    async def _async_notify_passage(
+        self,
+        plate: str,
+        event_id: str,
+        timestamp: datetime,
+        speed: tuple[float, float | None] | None,
+        speeding: bool = False,
+    ) -> None:
+        """Notify configured Companion App targets for an opted-in vehicle case."""
+        record = self.registry.plates.get(plate, {})
+        if speed is None:
+            observation = next(
+                (item for item in record.get("observations", []) if item.get("event_id") == event_id),
+                None,
+            )
+            if observation and observation.get("speed_kmh") is not None:
+                speed = (
+                    float(observation["speed_kmh"]),
+                    observation.get("velocity_angle"),
+                )
+        vehicle = record.get("vehicle") or {}
+        vehicle_name = " ".join(
+            str(value) for value in (vehicle.get("make"), vehicle.get("model")) if value
+        )
+        relation = record.get("name") or vehicle_name
+        details = [plate]
+        if relation:
+            details.append(relation)
+        details.append(timestamp.strftime("%H:%M"))
+        if speed:
+            details.append(f"{speed[0]:.1f} km/t")
+        notes = str(record.get("notes") or "").strip()
+        message = " · ".join(details)
+        if notes:
+            message = f"{message}\nBemærkning: {notes}"
+        service_data: dict[str, Any] = {
+            "title": "Høj hastighed registreret" if speeding else "Køretøj registreret",
+            "message": message,
+        }
+        notification_data: dict[str, Any] = {}
+        snapshot = record.get("snapshot") or {}
+        if snapshot.get("event_id") == event_id:
+            notification_data["image"] = SNAPSHOT_API_PATH.format(plate=plate)
+        if self.notify_critical:
+            notification_data["push"] = {
+                "sound": {
+                    "name": "default",
+                    "critical": 1,
+                    "volume": 1.0,
+                }
+            }
+        if notification_data:
+            service_data["data"] = notification_data
+        for service in self.notify_services:
+            if not self.hass.services.has_service("notify", service):
+                _LOGGER.warning("Configured notification service notify.%s is unavailable", service)
+                continue
+            await self.hass.services.async_call(
+                "notify", service, service_data, blocking=False
+            )
+
+    async def _async_capture_and_notify(
+        self,
+        plate: str,
+        event_id: str,
+        camera: str,
+        timestamp: datetime,
+        speed: tuple[float, float | None] | None,
+        generation: int,
+        capture_snapshot: bool,
+        notify_passage: bool,
+        speeding: bool = False,
+    ) -> None:
+        """Capture the current passage image before sending its notification."""
+        if capture_snapshot:
+            await self._async_store_snapshot(plate, event_id, camera, generation)
+        if notify_passage:
+            await self._async_notify_passage(
+                plate, event_id, timestamp, speed, speeding
+            )
 
     @callback
     def _events_message_received(self, message: mqtt.ReceiveMessage) -> None:
@@ -186,6 +295,7 @@ class LPRManager:
             if self.registry.set_observation_speed(event_id, speed, angle):
                 self.store.async_delay_save(lambda: self.registry.data, 5)
                 async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
+                self._schedule_speed_notification(event_id, speed, angle)
                 return
             if any(event_id in record["event_ids"] for record in self.registry.plates.values()):
                 return
@@ -196,6 +306,41 @@ class LPRManager:
         except (ValueError, TypeError, json.JSONDecodeError):
             _LOGGER.warning("Ignored invalid Frigate events payload", exc_info=True)
 
+    def _schedule_speed_notification(
+        self, event_id: str, speed: float, angle: float | None
+    ) -> None:
+        """Send a speed-only alert when speed arrived after the LPR message."""
+        if speed <= self.speed_limit or not self.notify_services:
+            return
+        for plate, record in self.registry.plates.items():
+            observation = next(
+                (item for item in record["observations"] if item.get("event_id") == event_id),
+                None,
+            )
+            if observation is None:
+                continue
+            if observation.get("speed_notification_sent"):
+                return
+            if not record.get("notify_on_speed") or record.get("notify_on_passage"):
+                return
+            observation["speed_notification_sent"] = True
+            self.store.async_delay_save(lambda: self.registry.data, 5)
+            self.hass.async_create_task(
+                self._async_capture_and_notify(
+                    plate,
+                    event_id,
+                    str(observation.get("camera", "")),
+                    datetime.fromisoformat(observation["timestamp"]),
+                    (speed, angle),
+                    self._snapshot_generations.get(plate, 0),
+                    bool(self.snapshots_enabled and self.snapshot_entity),
+                    True,
+                    True,
+                ),
+                "Frigate LPR high speed notification",
+            )
+            return
+
     async def async_set_metadata(
         self,
         plate: str,
@@ -205,6 +350,8 @@ class LPRManager:
         notes: str | None = None,
         vehicle: dict[str, Any] | None = None,
         ignored: bool | None = None,
+        notify_on_passage: bool | None = None,
+        notify_on_speed: bool | None = None,
     ) -> None:
         is_new = normalize_plate(plate) not in self.registry.plates
         key = self.registry.set_metadata(
@@ -214,6 +361,8 @@ class LPRManager:
             notes=notes,
             vehicle=vehicle,
             ignored=ignored,
+            notify_on_passage=notify_on_passage,
+            notify_on_speed=notify_on_speed,
         )
         await self.store.async_save(self.registry.data)
         if is_new:

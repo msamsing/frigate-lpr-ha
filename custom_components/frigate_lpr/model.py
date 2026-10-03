@@ -37,9 +37,12 @@ class LPRRegistry:
             record.setdefault("notes", "")
             record.setdefault("snapshot", None)
             record.setdefault("ignored", False)
+            record.setdefault("notify_on_passage", False)
+            record.setdefault("notify_on_speed", False)
             for observation in record.get("observations", []):
                 observation.setdefault("speed_kmh", None)
                 observation.setdefault("velocity_angle", None)
+                observation.setdefault("speed_notification_sent", False)
         self.frequent_observations = frequent_observations
         self.frequent_days = frequent_days
 
@@ -56,6 +59,8 @@ class LPRRegistry:
         notes: str | None = None,
         vehicle: dict[str, Any] | None = None,
         ignored: bool | None = None,
+        notify_on_passage: bool | None = None,
+        notify_on_speed: bool | None = None,
     ) -> str:
         """Add or update user-controlled metadata."""
         key = normalize_plate(plate)
@@ -68,6 +73,10 @@ class LPRRegistry:
             record["notes"] = notes.strip()
         if ignored is not None:
             record["ignored"] = ignored
+        if notify_on_passage is not None:
+            record["notify_on_passage"] = notify_on_passage
+        if notify_on_speed is not None:
+            record["notify_on_speed"] = notify_on_speed
         if vehicle is not None:
             merged_vehicle = dict(record.get("vehicle") or {})
             for field, value in vehicle.items():
@@ -123,6 +132,7 @@ class LPRRegistry:
             "score": score,
             "speed_kmh": speed_kmh,
             "velocity_angle": velocity_angle,
+            "speed_notification_sent": False,
         }
         record["observations"].append(observation)
         self._recalculate_record(record)
@@ -636,4 +646,6 @@ class LPRRegistry:
             "notes": "",
             "snapshot": None,
             "ignored": False,
+            "notify_on_passage": False,
+            "notify_on_speed": False,
         }

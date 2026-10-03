@@ -153,6 +153,8 @@ class LPRPlateSensor(LPRBaseSensor):
             "notes": view.get("notes", ""),
             "snapshot": view.get("snapshot"),
             "ignored": view.get("ignored", False),
+            "notify_on_passage": view.get("notify_on_passage", False),
+            "notify_on_speed": view.get("notify_on_speed", False),
         }
 
 

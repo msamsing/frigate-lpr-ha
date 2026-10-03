@@ -29,6 +29,8 @@ observationshistorikken.
 - Særskilt trafikvisning med time-, ugedags- og kategorifordeling.
 - Permanent hastighed pr. passage ved sammenkobling af `frigate/events` og LPR-beskeden via Frigate event-id.
 - Hastighedsstatistik pr. køretøj samt gennemsnit, højeste målinger og hurtigste passager i trafikvisningen.
+- Valgfri passagenotifikation pr. køretøjssag til op til to Home Assistant Companion App-enheder.
+- Valgfri iOS critical notification, som kan afspille lyd gennem lydløs/Fokus, når tilladelsen er aktiveret på iPhone.
 - Valgfrit MotorAPI-opslag af mærke, model og andre grunddata for helt nye, ukendte plader.
 - Plader, som brugeren har navngivet eller markeret som Egen, Kendt eller Uønsket, sendes aldrig automatisk til MotorAPI.
 
@@ -136,6 +138,30 @@ vælges `mph`, hvorefter integrationen omregner og gemmer værdien som km/t. En
 vejledende fartgrænse kan angives til dashboardets markering og optælling. Frigates
 kamerabaserede hastighed er et estimat og må ikke betragtes som en
 myndighedsgodkendt eller bevismæssig hastighedsmåling.
+
+### Notifikation ved passage
+
+Under **Indstillinger → Passagenotifikationer** kan op til to registrerede Home
+Assistant Companion App-enheder vælges. På den enkelte køretøjssag kan
+**Notificér ved hver passage** derefter slås til. En notifikation sendes kun for
+en ny, unik passage og ikke for gentagne LPR-opdateringer af samme Frigate-event.
+Notifikationen indeholder nummerplade, navn eller bilmodel, tidspunkt, eventuel
+hastighed og bilsagens bemærkning. Hvis snapshot-funktionen er aktiveret og det
+aktuelle billede kan hentes, venter notifikationen på den lokale kopi og vedhæfter
+den. Dermed genbruges et ældre snapshot ikke som om det tilhørte den nye passage.
+
+På bilsagen kan **Notificér ved for høj hastighed** vælges uafhængigt. Den udløses,
+når Frigates estimerede passagehastighed overstiger den vejledende fartgrænse under
+**Hastighed fra Frigate**, eksempelvis 40 eller 50 km/t. Hastighedsbeskeden virker
+også, når `frigate/events`-målingen ankommer efter LPR-beskeden. Hvis notifikation
+ved hver passage også er slået til, sendes der kun én besked for passagen.
+
+Indstillingen **Send som critical notification** bruger iOS' critical alert-payload
+med standardlyd og fuld lydstyrke. Den kan derfor bryde lydløs og Fokus på iPhone,
+men kun hvis brugeren også har tilladt **Critical Alerts** for Home Assistant i
+iOS-indstillingerne. Funktionen bør kun bruges til køretøjer, hvor hver passage
+reelt kræver øjeblikkelig opmærksomhed. Ændringer af modtagere og critical-status
+genindlæser integrationen fra UI'et og kræver ikke en fuld genstart af Home Assistant.
 
 ## Dashboard
 

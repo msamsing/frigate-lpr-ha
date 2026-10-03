@@ -36,6 +36,7 @@
           "vehicle_lookup": "Køretøjsopslag via MotorAPI",
           "snapshots": "Snapshot fra billedentitet",
           "speed": "Hastighed fra Frigate",
+          "notifications": "Passagenotifikationer",
           "add_plate": "Tilføj eller opdater kendt nummerplade",
           "remove_plate": "Fjern navn og kategori"
         },
@@ -44,6 +45,7 @@
           "vehicle_lookup": "Aktivér valgfrit opslag af bildata for helt nye, ukendte plader.",
           "snapshots": "Vælg en image-entitet og gem dens aktuelle billede lokalt ved hver passage.",
           "speed": "Knyt Frigates estimerede hastighed til hver passage og vælg en vejledende fartgrænse.",
+          "notifications": "Vælg op til to Companion App-enheder og om beskeder skal sendes som critical alerts.",
           "add_plate": "Opret eller rediger en lokal køretøjssag med navn, kategori og bildata.",
           "remove_plate": "Fjern brugerdata fra en plade uden at slette observationshistorikken."
         }
@@ -108,7 +110,21 @@
           "chassis_type": "Karrosseri",
           "fuel_type": "Drivmiddel",
           "vehicle_type": "Køretøjstype",
-          "ignored": "Ignorér i oversigter og trafikstatistik"
+          "ignored": "Ignorér i oversigter og trafikstatistik",
+          "notify_on_passage": "Notificér ved hver passage",
+          "notify_on_speed": "Notificér ved hastighed over fartgrænsen"
+        }
+      },
+      "notifications": {
+        "title": "Passagenotifikationer",
+        "description": "Vælg op til to enheder fra Home Assistant Companion App. Kun køretøjssager, hvor 'Notificér ved hver passage' er slået til, udløser en besked. Critical alerts kan bryde lydløs og Fokus på iPhone, hvis tilladelsen også er givet i iOS.",
+        "data": {
+          "notify_service_1": "Første enhed",
+          "notify_service_2": "Anden enhed",
+          "notify_critical": "Send som critical notification"
+        },
+        "data_description": {
+          "notify_critical": "Afspiller standardlyd ved fuld styrke på iPhone, også ved lydløs/Fokus, når Critical Alerts er tilladt for Home Assistant-appen."
         }
       },
       "remove_plate": {

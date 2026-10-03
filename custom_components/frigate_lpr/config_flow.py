@@ -29,6 +29,9 @@ from .const import (
     CONF_EVENTS_TOPIC,
     CONF_SPEED_LIMIT,
     CONF_SPEED_UNIT,
+    CONF_NOTIFY_SERVICE_1,
+    CONF_NOTIFY_SERVICE_2,
+    CONF_NOTIFY_CRITICAL,
     CONF_TOPIC,
     DEFAULT_FREQUENT_DAYS,
     DEFAULT_FREQUENT_OBSERVATIONS,
@@ -38,6 +41,7 @@ from .const import (
     DEFAULT_EVENTS_TOPIC,
     DEFAULT_SPEED_LIMIT,
     DEFAULT_SPEED_UNIT,
+    DEFAULT_NOTIFY_CRITICAL,
     DEFAULT_TOPIC,
     DOMAIN,
 )
@@ -87,7 +91,15 @@ class FrigateLPROptionsFlow(config_entries.OptionsFlow):
         """Show the settings menu."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["classification", "vehicle_lookup", "snapshots", "speed", "add_plate", "remove_plate"],
+            menu_options=[
+                "classification",
+                "vehicle_lookup",
+                "snapshots",
+                "speed",
+                "notifications",
+                "add_plate",
+                "remove_plate",
+            ],
         )
 
     async def async_step_classification(self, user_input: dict[str, Any] | None = None) -> FlowResult:
@@ -199,6 +211,47 @@ class FrigateLPROptionsFlow(config_entries.OptionsFlow):
             ),
         )
 
+    async def async_step_notifications(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Configure up to two Companion App notification targets."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title="", data={**self.config_entry.options, **user_input}
+            )
+        notify_services = self.hass.services.async_services().get("notify", {})
+        choices = {"": "Ingen"}
+        choices.update(
+            {
+                service: service.removeprefix("mobile_app_").replace("_", " ").title()
+                for service in sorted(notify_services)
+                if service.startswith("mobile_app_")
+            }
+        )
+        for key in (CONF_NOTIFY_SERVICE_1, CONF_NOTIFY_SERVICE_2):
+            current = self.config_entry.options.get(key, "")
+            if current and current not in choices:
+                choices[current] = current
+        return self.async_show_form(
+            step_id="notifications",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_NOTIFY_SERVICE_1,
+                        default=self.config_entry.options.get(CONF_NOTIFY_SERVICE_1, ""),
+                    ): vol.In(choices),
+                    vol.Optional(
+                        CONF_NOTIFY_SERVICE_2,
+                        default=self.config_entry.options.get(CONF_NOTIFY_SERVICE_2, ""),
+                    ): vol.In(choices),
+                    vol.Required(
+                        CONF_NOTIFY_CRITICAL,
+                        default=self.config_entry.options.get(
+                            CONF_NOTIFY_CRITICAL, DEFAULT_NOTIFY_CRITICAL
+                        ),
+                    ): BooleanSelector(),
+                }
+            ),
+        )
+
     async def async_step_add_plate(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Add user-controlled plate metadata."""
         if user_input is not None:
@@ -220,6 +273,8 @@ class FrigateLPROptionsFlow(config_entries.OptionsFlow):
                     "type": user_input.get("vehicle_type", ""),
                 },
                 ignored=user_input.get("ignored", False),
+                notify_on_passage=user_input.get("notify_on_passage", False),
+                notify_on_speed=user_input.get("notify_on_speed", False),
             )
             return self.async_create_entry(title="", data=dict(self.config_entry.options))
         return self.async_show_form(
@@ -242,6 +297,8 @@ class FrigateLPROptionsFlow(config_entries.OptionsFlow):
                     vol.Optional("fuel_type", default=""): str,
                     vol.Optional("vehicle_type", default=""): str,
                     vol.Required("ignored", default=False): BooleanSelector(),
+                    vol.Required("notify_on_passage", default=False): BooleanSelector(),
+                    vol.Required("notify_on_speed", default=False): BooleanSelector(),
                 }
             ),
         )

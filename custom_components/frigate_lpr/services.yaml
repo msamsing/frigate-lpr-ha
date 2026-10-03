@@ -77,6 +77,16 @@ set_plate:
       description: Bevar sagen og historikken, men skjul køretøjet fra oversigter og trafikstatistik.
       selector:
         boolean:
+    notify_on_passage:
+      name: Notificér ved passage
+      description: Send en notifikation til integrationens valgte modtagere, hver gang køretøjet registreres.
+      selector:
+        boolean:
+    notify_on_speed:
+      name: Notificér ved for høj hastighed
+      description: Send en notifikation, når køretøjets målte hastighed overstiger integrationens valgte fartgrænse.
+      selector:
+        boolean:
 remove_plate_metadata:
   name: Fjern navn og kategori
   description: Fjern kun brugerens metadata; observationer slettes ikke.

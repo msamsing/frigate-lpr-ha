@@ -228,6 +228,30 @@ class LPRRegistryTests(unittest.TestCase):
         self.assertEqual(case["vehicle_source"], "manual")
         self.assertFalse(restored.should_lookup_vehicle("CASE123"))
 
+    def test_passage_notification_preference_is_persistent(self):
+        registry = LPRRegistry()
+        registry.set_metadata(
+            "ALERT1",
+            "Besøgende",
+            "known",
+            notify_on_passage=True,
+            notify_on_speed=True,
+        )
+        self.assertTrue(registry.plate_view("ALERT1")["notify_on_passage"])
+        self.assertTrue(registry.plate_view("ALERT1")["notify_on_speed"])
+        restored = LPRRegistry(registry.data)
+        self.assertTrue(restored.plate_view("ALERT1")["notify_on_passage"])
+        self.assertTrue(restored.plate_view("ALERT1")["notify_on_speed"])
+        restored.set_metadata(
+            "ALERT1",
+            "Besøgende",
+            "known",
+            notify_on_passage=False,
+            notify_on_speed=False,
+        )
+        self.assertFalse(restored.plate_view("ALERT1")["notify_on_passage"])
+        self.assertFalse(restored.plate_view("ALERT1")["notify_on_speed"])
+
     def test_manual_edit_preserves_unexposed_api_fields(self):
         registry = LPRRegistry({}, frequent_observations=5, frequent_days=3)
         registry.observe(

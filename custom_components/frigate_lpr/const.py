@@ -3,7 +3,7 @@
 DOMAIN = "frigate_lpr"
 PLATFORMS = ["sensor", "select"]
 CARD_RESOURCE_PATH = "/frigate_lpr/frigate-lpr-card.js"
-CARD_URL = f"{CARD_RESOURCE_PATH}?v=1.10.0"
+CARD_URL = f"{CARD_RESOURCE_PATH}?v=1.11.0"
 STATIC_URL_PATH = "/frigate_lpr"
 
 CONF_TOPIC = "topic"
@@ -18,6 +18,9 @@ CONF_SPEED_ENABLED = "speed_enabled"
 CONF_EVENTS_TOPIC = "events_topic"
 CONF_SPEED_LIMIT = "speed_limit"
 CONF_SPEED_UNIT = "speed_unit"
+CONF_NOTIFY_SERVICE_1 = "notify_service_1"
+CONF_NOTIFY_SERVICE_2 = "notify_service_2"
+CONF_NOTIFY_CRITICAL = "notify_critical"
 
 DEFAULT_TOPIC = "frigate/tracked_object_update"
 DEFAULT_FREQUENT_OBSERVATIONS = 10
@@ -28,6 +31,7 @@ DEFAULT_SPEED_ENABLED = True
 DEFAULT_EVENTS_TOPIC = "frigate/events"
 DEFAULT_SPEED_LIMIT = 50
 DEFAULT_SPEED_UNIT = "kmh"
+DEFAULT_NOTIFY_CRITICAL = False
 
 SNAPSHOT_API_PATH = "/api/frigate_lpr/snapshot/{plate}"
 
