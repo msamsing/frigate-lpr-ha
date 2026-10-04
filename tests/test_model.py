@@ -206,6 +206,23 @@ class LPRRegistryTests(unittest.TestCase):
         new_vehicle = next(item for item in recent if item["plate"] == "NEW123")["vehicle"]
         self.assertEqual(new_vehicle["model"], "XC40")
 
+    def test_not_found_lookup_is_persisted_and_auto_ignored(self):
+        registry = LPRRegistry()
+        registry.observe(
+            "MISS123",
+            datetime.now(timezone.utc),
+            "missing",
+            camera="road",
+        )
+        registry.mark_vehicle_lookup(
+            "MISS123",
+            {"status": "not_found", "provider": "motorapi"},
+        )
+        case = registry.plate_view("MISS123")
+        self.assertTrue(case["ignored"])
+        self.assertEqual(case["auto_ignored_reason"], "motorapi_unknown_vehicle")
+        self.assertFalse(registry.should_lookup_vehicle("MISS123"))
+
     def test_manual_vehicle_case_roundtrip(self):
         registry = LPRRegistry()
         registry.set_metadata(

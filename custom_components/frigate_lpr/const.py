@@ -3,7 +3,7 @@
 DOMAIN = "frigate_lpr"
 PLATFORMS = ["sensor", "select"]
 CARD_RESOURCE_PATH = "/frigate_lpr/frigate-lpr-card.js"
-CARD_URL = f"{CARD_RESOURCE_PATH}?v=1.12.0"
+CARD_URL = f"{CARD_RESOURCE_PATH}?v=1.12.1"
 STATIC_URL_PATH = "/frigate_lpr"
 
 CONF_TOPIC = "topic"
@@ -38,6 +38,7 @@ DEFAULT_NOTIFY_SPEEDING = False
 SNAPSHOT_API_PATH = "/api/frigate_lpr/snapshot/{plate}"
 
 MOTORAPI_URL = "https://v1.motorapi.dk/vehicles/{plate}"
+MOTORAPI_SEARCH_URL = "https://v1.motorapi.dk/vehicles"
 
 SIGNAL_UPDATE = f"{DOMAIN}_update"
 SIGNAL_NEW_PLATE = f"{DOMAIN}_new_plate"

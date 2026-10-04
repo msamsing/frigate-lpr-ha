@@ -88,6 +88,9 @@ Af hensyn til privatliv og API-forbrug gælder følgende:
   eksisterende historik sendes ikke bagudrettet.
 - Ethvert opslag markeres persistent som forsøgt, også hvis pladen ikke findes eller
   API'et svarer med en fejl. Senere observationer medfører derfor ikke nye API-kald.
+- Hvis MotorAPIs direkte endpoint for aktuelt registrerede køretøjer ikke finder
+  pladen, prøver integrationen automatisk søge-endpointet, som også omfatter
+  tidligere registreringer, før resultatet behandles som `not_found`.
 - Hvis MotorAPI definitivt svarer, at pladen ikke findes, eller returnerer et
   succesfuldt svar uden mærke og model, betragtes aflæsningen som en sandsynlig
   fejl. En ikke-navngivet og ikke-kategoriseret sag markeres da automatisk som

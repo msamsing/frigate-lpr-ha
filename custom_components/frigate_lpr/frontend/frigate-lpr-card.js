@@ -315,7 +315,7 @@ class FrigateLprCard extends HTMLElement {
       this._message = "Henter stamdata…"; this._render();
       try {
         await this._hass.callService("frigate_lpr", "lookup_vehicle", { plate: item.plate });
-        this._message = "Stamdata er hentet og gemt lokalt på sagen.";
+        this._message = "Opslaget er afsluttet. Eventuelle fundne stamdata er gemt lokalt.";
       } catch (_error) { this._message = "Opslaget mislykkedes. Kontrollér MotorAPI-indstillingerne."; }
       this._render();
     });

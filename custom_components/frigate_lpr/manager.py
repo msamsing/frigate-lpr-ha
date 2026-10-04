@@ -20,7 +20,13 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
-from .const import MOTORAPI_URL, SIGNAL_NEW_PLATE, SIGNAL_UPDATE, SNAPSHOT_API_PATH
+from .const import (
+    MOTORAPI_SEARCH_URL,
+    MOTORAPI_URL,
+    SIGNAL_NEW_PLATE,
+    SIGNAL_UPDATE,
+    SNAPSHOT_API_PATH,
+)
 from .model import LPRRegistry, normalize_plate
 
 _LOGGER = logging.getLogger(__name__)
@@ -419,7 +425,7 @@ class LPRManager:
         await self.store.async_save(self.registry.data)
         async_dispatcher_send(self.hass, f"{SIGNAL_UPDATE}_{self.entry_id}")
 
-    async def async_lookup_vehicle_manual(self, plate: str) -> None:
+    async def async_lookup_vehicle_manual(self, plate: str) -> dict[str, Any]:
         """Explicitly refresh vehicle data for one locally stored case."""
         normalized = normalize_plate(plate)
         if not self.motorapi_enabled or not self.motorapi_key:
@@ -427,8 +433,9 @@ class LPRManager:
         if normalized not in self.registry.plates:
             raise ValueError("Save the vehicle case before requesting vehicle data")
         result = await self._async_lookup_vehicle(normalized, manual=True)
-        if result.get("status") != "success":
+        if result.get("status") not in {"success", "not_found"}:
             raise ValueError(f"MotorAPI lookup failed: {result.get('status', 'error')}")
+        return result
 
     async def _async_lookup_vehicle(self, plate: str, *, manual: bool = False) -> dict[str, Any]:
         """Look up and permanently cache one new, unknown plate."""
@@ -484,6 +491,47 @@ class LPRManager:
                     result["status"] = "quota_exceeded"
                 else:
                     result["status"] = "provider_error"
+            if result.get("status") == "not_found":
+                response = await session.get(
+                    MOTORAPI_SEARCH_URL,
+                    params={"registration_number": plate},
+                    headers={
+                        "Accept": "application/json",
+                        "X-AUTH-TOKEN": self.motorapi_key,
+                    },
+                    timeout=ClientTimeout(total=15),
+                )
+                async with response:
+                    if response.status == 200:
+                        payload = await response.json()
+                        candidates = payload if isinstance(payload, list) else []
+                        vehicle = next(
+                            (
+                                item
+                                for item in candidates
+                                if isinstance(item, dict)
+                                and str(item.get("status", "")).lower() == "registreret"
+                            ),
+                            next(
+                                (item for item in candidates if isinstance(item, dict)),
+                                None,
+                            ),
+                        )
+                        if vehicle is not None:
+                            result = {
+                                "status": "success",
+                                "provider": "motorapi",
+                                "attempted_at": dt_util.utcnow().isoformat(),
+                                "trigger": "manual" if manual else "automatic",
+                                "lookup_method": "registration_number_search",
+                                "vehicle": self._vehicle_data(vehicle),
+                            }
+                    elif response.status in {401, 403}:
+                        result["status"] = "authentication_error"
+                    elif response.status == 429:
+                        result["status"] = "quota_exceeded"
+                    elif response.status >= 500:
+                        result["status"] = "provider_error"
         except (ClientError, TimeoutError, ValueError, TypeError):
             _LOGGER.warning("MotorAPI lookup failed", exc_info=True)
 
