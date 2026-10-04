@@ -32,6 +32,7 @@ from .const import (
     CONF_NOTIFY_SERVICE_1,
     CONF_NOTIFY_SERVICE_2,
     CONF_NOTIFY_CRITICAL,
+    CONF_NOTIFY_SPEEDING,
     CONF_TOPIC,
     DEFAULT_FREQUENT_DAYS,
     DEFAULT_FREQUENT_OBSERVATIONS,
@@ -42,6 +43,7 @@ from .const import (
     DEFAULT_SPEED_LIMIT,
     DEFAULT_SPEED_UNIT,
     DEFAULT_NOTIFY_CRITICAL,
+    DEFAULT_NOTIFY_SPEEDING,
     DEFAULT_TOPIC,
     DOMAIN,
 )
@@ -248,6 +250,12 @@ class FrigateLPROptionsFlow(config_entries.OptionsFlow):
                             CONF_NOTIFY_CRITICAL, DEFAULT_NOTIFY_CRITICAL
                         ),
                     ): BooleanSelector(),
+                    vol.Required(
+                        CONF_NOTIFY_SPEEDING,
+                        default=self.config_entry.options.get(
+                            CONF_NOTIFY_SPEEDING, DEFAULT_NOTIFY_SPEEDING
+                        ),
+                    ): BooleanSelector(),
                 }
             ),
         )
@@ -274,7 +282,6 @@ class FrigateLPROptionsFlow(config_entries.OptionsFlow):
                 },
                 ignored=user_input.get("ignored", False),
                 notify_on_passage=user_input.get("notify_on_passage", False),
-                notify_on_speed=user_input.get("notify_on_speed", False),
             )
             return self.async_create_entry(title="", data=dict(self.config_entry.options))
         return self.async_show_form(
@@ -284,7 +291,7 @@ class FrigateLPROptionsFlow(config_entries.OptionsFlow):
                     vol.Required("plate"): str,
                     vol.Required("name"): str,
                     vol.Required("category", default="known"): vol.In(
-                        ["own", "known", "unknown", "unwanted"]
+                        ["own", "known", "taxi", "unknown", "unwanted"]
                     ),
                     vol.Optional("notes", default=""): str,
                     vol.Optional("make", default=""): str,
@@ -298,7 +305,6 @@ class FrigateLPROptionsFlow(config_entries.OptionsFlow):
                     vol.Optional("vehicle_type", default=""): str,
                     vol.Required("ignored", default=False): BooleanSelector(),
                     vol.Required("notify_on_passage", default=False): BooleanSelector(),
-                    vol.Required("notify_on_speed", default=False): BooleanSelector(),
                 }
             ),
         )

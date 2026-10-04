@@ -111,8 +111,7 @@
           "fuel_type": "Drivmiddel",
           "vehicle_type": "Køretøjstype",
           "ignored": "Ignorér i oversigter og trafikstatistik",
-          "notify_on_passage": "Notificér ved hver passage",
-          "notify_on_speed": "Notificér ved hastighed over fartgrænsen"
+          "notify_on_passage": "Notificér ved hver passage"
         }
       },
       "notifications": {
@@ -121,10 +120,12 @@
         "data": {
           "notify_service_1": "Første enhed",
           "notify_service_2": "Anden enhed",
-          "notify_critical": "Send som critical notification"
+          "notify_critical": "Send som critical notification",
+          "notify_speeding": "Notificér ved alle passager over fartgrænsen"
         },
         "data_description": {
-          "notify_critical": "Afspiller standardlyd ved fuld styrke på iPhone, også ved lydløs/Fokus, når Critical Alerts er tilladt for Home Assistant-appen."
+          "notify_critical": "Afspiller standardlyd ved fuld styrke på iPhone, også ved lydløs/Fokus, når Critical Alerts er tilladt for Home Assistant-appen.",
+          "notify_speeding": "Gælder globalt for alle køretøjer. Grænsen vælges under Hastighed fra Frigate."
         }
       },
       "remove_plate": {

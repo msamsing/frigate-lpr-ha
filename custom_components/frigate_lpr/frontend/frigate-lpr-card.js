@@ -3,6 +3,7 @@ const CARD_NAME = "frigate-lpr-card";
 const CATEGORY = {
   own: { label: "Egen", color: "#3b82f6", icon: "mdi:home-garage" },
   known: { label: "Kendt", color: "#2e9d58", icon: "mdi:account-check" },
+  taxi: { label: "Hyrevogn", color: "#7c3aed", icon: "mdi:taxi" },
   unknown: { label: "Ukendt", color: "#b7791f", icon: "mdi:help-circle-outline" },
   unwanted: { label: "Uønsket", color: "#d64545", icon: "mdi:alert-circle-outline" },
 };
@@ -21,8 +22,12 @@ const formatDate = (value, timeOnly = false) => {
 };
 
 const clock = (minute) => minute == null ? "–" : `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
-const categoryKey = (item) => ["own", "known", "unwanted"].includes(item?.user_category || item?.category)
-  ? (item.user_category || item.category) : "unknown";
+const categoryKey = (item) => {
+  const explicit = item?.user_category || item?.category;
+  if (["own", "known", "taxi", "unknown", "unwanted"].includes(explicit)) return explicit;
+  if (item?.classification === "Hyrevogn") return "taxi";
+  return "unknown";
+};
 const plateDisplay = (plate) => {
   const clean = String(plate || "");
   return clean.length > 2 ? `${clean.slice(0, 2)} ${clean.slice(2)}` : clean;
@@ -122,7 +127,7 @@ class FrigateLprCard extends HTMLElement {
         return `<button class="vehicle-row ${selected ? "selected" : ""}" data-plate="${escapeHtml(item.plate)}">
           <span class="mini-plate">${escapeHtml(plateDisplay(item.plate))}</span>
           <span class="vehicle-copy"><strong>${escapeHtml([vehicle.make, vehicle.model].filter(Boolean).join(" ") || item.name || "Ukendt køretøj")}</strong><small>${escapeHtml(vehicle.color || "Farve ukendt")} · ${formatDate(item.last_seen)}</small></span>
-          <span class="row-meta">${item.ignored ? '<span class="ignored-label">Ignoreret</span>' : this._badge(item)}<small>${item.observations_count || 0} passager</small></span>
+          <span class="row-meta">${item.ignored ? `<span class="ignored-label" title="${item.auto_ignored_reason === "motorapi_unknown_vehicle" ? "MotorAPI fandt ikke et entydigt køretøj" : "Manuelt ignoreret"}">${item.auto_ignored_reason === "motorapi_unknown_vehicle" ? "Ignoreret · mulig fejlaflæsning" : "Ignoreret"}</span>` : this._badge(item)}<small>${item.observations_count || 0} passager</small></span>
         </button>`;
       }).join("") : '<div class="empty">Ingen køretøjer matcher søgningen</div>'}</div>
     </section>`;
@@ -161,7 +166,6 @@ class FrigateLprCard extends HTMLElement {
         <label class="notes-editor"><span>Bemærkning</span><textarea id="detail-notes" rows="2" placeholder="Tilføj en kort bemærkning…">${escapeHtml(item.notes || "")}</textarea></label>
         <label class="ignore-toggle"><input id="detail-ignored" type="checkbox" ${item.ignored ? "checked" : ""}><span><strong>Ignorér i oversigter</strong><small>Sagen og historikken bevares, men tæller ikke med i seneste passager eller trafikstatistik.</small></span></label>
         <label class="ignore-toggle"><input id="detail-notify" type="checkbox" ${item.notify_on_passage ? "checked" : ""}><span><strong>Notificér ved hver passage</strong><small>Sender besked til de enheder, der er valgt under integrationens notifikationsindstillinger.</small></span></label>
-        <label class="ignore-toggle"><input id="detail-notify-speed" type="checkbox" ${item.notify_on_speed ? "checked" : ""}><span><strong>Notificér ved for høj hastighed</strong><small>Sender besked, når målingen overstiger fartgrænsen under “Hastighed fra Frigate”.</small></span></label>
         <div class="detail-actions"><button type="submit" class="primary"><ha-icon icon="mdi:content-save-outline"></ha-icon>Gem ændringer</button><button type="button" class="edit-full"><ha-icon icon="mdi:pencil-outline"></ha-icon>Rediger stamdata</button></div>
         ${this._message ? `<p class="message">${escapeHtml(this._message)}</p>` : ""}
       </form>
@@ -192,10 +196,10 @@ class FrigateLprCard extends HTMLElement {
 
   _traffic() {
     const stats = this._entity("traffic_stats")?.attributes || {};
-    const hours = stats.hour_counts || Array(24).fill(0);
-    const weekdays = stats.weekday_counts || Array(7).fill(0);
-    const categories = stats.categories || { known: 0, unknown: 0, unwanted: 0 };
-    const totalCategories = Math.max(1, categories.known + categories.unknown + categories.unwanted);
+    const hours = stats.hour_average || stats.hour_counts || Array(24).fill(0);
+    const weekdays = stats.weekday_average || stats.weekday_counts || Array(7).fill(0);
+    const categories = stats.categories || { known: 0, taxi: 0, unknown: 0, unwanted: 0 };
+    const totalCategories = Math.max(1, categories.known + (categories.taxi || 0) + categories.unknown + categories.unwanted);
     const maxHour = Math.max(1, ...hours);
     const maxWeekday = Math.max(1, ...weekdays);
     const weekdayNames = ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"];
@@ -206,9 +210,9 @@ class FrigateLprCard extends HTMLElement {
     const offenders = (speed.fastest_passages || []).filter((item) => item.speed_kmh > speedLimit);
     return `<section class="traffic-panel panel"><div class="traffic-head"><div><small>VEJENS TRAFIK</small><h2>Generel trafikstatistik</h2><p>Ignorerede køretøjer er ikke medregnet.</p></div><ha-icon icon="mdi:chart-box-outline"></ha-icon></div>
       <div class="traffic-kpis">${this._statCard("Passager i dag", stats.today ?? 0)}${this._statCard("Seneste 7 dage", stats.last_7_days ?? 0)}${this._statCard("Seneste 30 dage", stats.last_30_days ?? 0)}${this._statCard("Gns. pr. dag", stats.daily_average_30 ?? 0)}${this._statCard("Travleste time", busiestHour)}${this._statCard("Travleste ugedag", busiestDay)}</div>
-      <div class="traffic-grid"><div class="traffic-chart wide"><div class="chart-title"><strong>Passager pr. time</strong><span>${stats.total_passages ?? 0} i hele historikken</span></div><svg viewBox="0 0 484 130" role="img" aria-label="Trafik fordelt på døgnets timer">${hours.map((count, hour) => `<rect x="${hour * 20 + 3}" y="${104 - count / maxHour * 88}" width="14" height="${Math.max(count ? 3 : 0, count / maxHour * 88)}" rx="2" class="chart-bar"><title>${hour}:00 · ${count} passager</title></rect>`).join("")}<line x1="3" y1="105" x2="480" y2="105" class="axis"/><text x="3" y="122">00</text><text x="238" y="122">12</text><text x="460" y="122">23</text></svg></div>
-        <div class="traffic-chart"><div class="chart-title"><strong>Ugedage</strong><span>Alle passager</span></div><div class="weekday-bars">${weekdays.map((count, day) => `<div><span style="height:${Math.max(count ? 4 : 1, count / maxWeekday * 100)}px" title="${weekdayNames[day]}: ${count}"></span><small>${weekdayNames[day]}</small><b>${count}</b></div>`).join("")}</div></div>
-        <div class="traffic-chart"><div class="chart-title"><strong>Trafikkens kategorier</strong><span>Fordelt på passager</span></div><div class="category-shares">${[["Kendte inkl. egne", categories.known, "#2e9d58"], ["Ukendte", categories.unknown, "#b7791f"], ["Uønskede", categories.unwanted, "#d64545"]].map(([label, count, color]) => `<div><span><i style="--share-color:${color}"></i>${label}</span><strong>${Math.round(count / totalCategories * 100)} %</strong><small>${count} passager</small><progress max="${totalCategories}" value="${count}" style="--share-color:${color}"></progress></div>`).join("")}</div></div>
+      <div class="traffic-grid"><div class="traffic-chart wide"><div class="chart-title"><strong>Passager pr. målt time</strong><span>Normaliseret efter faktisk driftstid</span></div><svg viewBox="0 0 484 130" role="img" aria-label="Gennemsnitlig trafik fordelt på døgnets timer">${hours.map((count, hour) => `<rect x="${hour * 20 + 3}" y="${104 - count / maxHour * 88}" width="14" height="${Math.max(count ? 3 : 0, count / maxHour * 88)}" rx="2" class="chart-bar"><title>${hour}:00 · ${Number(count).toFixed(2)} passager pr. målt time</title></rect>`).join("")}<line x1="3" y1="105" x2="480" y2="105" class="axis"/><text x="3" y="122">00</text><text x="238" y="122">12</text><text x="460" y="122">23</text></svg></div>
+        <div class="traffic-chart"><div class="chart-title"><strong>Ugedage</strong><span>Gns. pr. målt ugedag</span></div><div class="weekday-bars">${weekdays.map((count, day) => `<div><span style="height:${Math.max(count ? 4 : 1, count / maxWeekday * 100)}px" title="${weekdayNames[day]}: ${Number(count).toFixed(2)}"></span><small>${weekdayNames[day]}</small><b>${Number(count).toFixed(1)}</b></div>`).join("")}</div></div>
+        <div class="traffic-chart"><div class="chart-title"><strong>Trafikkens kategorier</strong><span>Fordelt på passager</span></div><div class="category-shares">${[["Kendte inkl. egne", categories.known, "#2e9d58"], ["Hyrevogne", categories.taxi || 0, "#7c3aed"], ["Ukendte", categories.unknown, "#b7791f"], ["Uønskede", categories.unwanted, "#d64545"]].map(([label, count, color]) => `<div><span><i style="--share-color:${color}"></i>${label}</span><strong>${Math.round(count / totalCategories * 100)} %</strong><small>${count} passager</small><progress max="${totalCategories}" value="${count}" style="--share-color:${color}"></progress></div>`).join("")}</div></div>
       </div><section class="speed-panel"><div class="chart-title"><strong>Hastigheder</strong><span>${speed.measured_passages ?? 0} målte passager</span></div><div class="speed-kpis">${this._statCard("Gennemsnit", speed.average_kmh == null ? "–" : `${speed.average_kmh} km/t`)}${this._statCard("Højeste måling", speed.maximum_kmh == null ? "–" : `${speed.maximum_kmh} km/t`)}${this._statCard(`Over ${speedLimit} km/t`, speed.over_limit ?? offenders.length)}</div><div class="fastest-list"><strong>Højeste målte hastigheder</strong>${(speed.fastest_passages || []).length ? (speed.fastest_passages || []).map((item) => this._fastestPassage(item, speedLimit)).join("") : '<div class="empty">Ingen hastighedsmålinger endnu</div>'}</div><p class="speed-disclaimer"><ha-icon icon="mdi:information-outline"></ha-icon>Frigates hastighed er et kamerabaseret estimat og må ikke betragtes som en myndighedsgodkendt måling.</p></section><div class="traffic-note"><ha-icon icon="mdi:information-outline"></ha-icon><span><strong>${stats.unique_vehicles ?? 0} køretøjer indgår</strong><small>${stats.ignored_vehicles ?? 0} ignorerede køretøjssager er udeladt. Statistikken beskriver registrerede passager, ikke den samlede trafik som kameraet ikke har aflæst.</small></span></div></section>`;
   }
 
@@ -301,7 +305,7 @@ class FrigateLprCard extends HTMLElement {
       const item = this._selected();
       const category = new FormData(event.target).get("category");
       try {
-        await this._hass.callService("frigate_lpr", "set_plate", { plate: item.plate, name: item.name || "", category, notes: this.shadowRoot.getElementById("detail-notes").value, ignored: this.shadowRoot.getElementById("detail-ignored").checked, notify_on_passage: this.shadowRoot.getElementById("detail-notify").checked, notify_on_speed: this.shadowRoot.getElementById("detail-notify-speed").checked });
+        await this._hass.callService("frigate_lpr", "set_plate", { plate: item.plate, name: item.name || "", category, notes: this.shadowRoot.getElementById("detail-notes").value, ignored: this.shadowRoot.getElementById("detail-ignored").checked, notify_on_passage: this.shadowRoot.getElementById("detail-notify").checked });
         this._message = "Ændringerne er gemt lokalt på sagen.";
       } catch (_error) { this._message = "Ændringerne kunne ikke gemmes."; }
       this._render();
@@ -356,18 +360,17 @@ class FrigateLprCard extends HTMLElement {
 
   _openEditor(item) {
     const vehicle = item?.vehicle || {};
-    const values = { plate: item?.plate || "", name: item?.name || "", category: categoryKey(item), notes: item?.notes || "", make: vehicle.make || "", model: vehicle.model || "", variant: vehicle.variant || "", model_type: vehicle.model_type || "", model_year: vehicle.model_year || "", color: vehicle.color || "", chassis_type: vehicle.chassis_type || "", fuel_type: vehicle.fuel_type || "", vehicle_type: vehicle.type || "", ignored: item?.ignored || false, notify_on_passage: item?.notify_on_passage || false, notify_on_speed: item?.notify_on_speed || false };
+    const values = { plate: item?.plate || "", name: item?.name || "", category: categoryKey(item), notes: item?.notes || "", make: vehicle.make || "", model: vehicle.model || "", variant: vehicle.variant || "", model_type: vehicle.model_type || "", model_year: vehicle.model_year || "", color: vehicle.color || "", chassis_type: vehicle.chassis_type || "", fuel_type: vehicle.fuel_type || "", vehicle_type: vehicle.type || "", ignored: item?.ignored || false, notify_on_passage: item?.notify_on_passage || false };
     const field = (key, label, type = "text") => `<label><span>${label}</span><input name="${key}" type="${type}" value="${escapeHtml(values[key])}"></label>`;
     const dialog = document.createElement("dialog");
     dialog.className = "case-dialog";
-    dialog.innerHTML = `<form method="dialog" id="case-editor"><div class="dialog-head"><div><small>KØRETØJSSAG</small><h2>${item ? `Rediger ${escapeHtml(item.plate)}` : "Nyt køretøj"}</h2></div><button value="cancel" class="icon-button"><ha-icon icon="mdi:close"></ha-icon></button></div><div class="editor-grid">${field("plate", "Nummerplade")}${field("name", "Navn / relation")}<label><span>Kategori</span><select name="category">${Object.entries(CATEGORY).map(([key, value]) => `<option value="${key}" ${values.category === key ? "selected" : ""}>${value.label}</option>`).join("")}</select></label>${field("make", "Mærke")}${field("model", "Model")}${field("variant", "Variant")}${field("model_type", "Modeltype")}${field("model_year", "Årgang", "number")}${field("color", "Farve")}${field("chassis_type", "Karrosseri")}${field("fuel_type", "Drivmiddel")}${field("vehicle_type", "Køretøjstype")}<label class="wide"><span>Bemærkning</span><textarea name="notes" rows="3">${escapeHtml(values.notes)}</textarea></label><label class="wide checkbox-field"><input name="ignored" type="checkbox" ${values.ignored ? "checked" : ""}><span>Ignorér i oversigter og trafikstatistik</span></label><label class="wide checkbox-field"><input name="notify_on_passage" type="checkbox" ${values.notify_on_passage ? "checked" : ""}><span>Notificér ved hver passage</span></label><label class="wide checkbox-field"><input name="notify_on_speed" type="checkbox" ${values.notify_on_speed ? "checked" : ""}><span>Notificér ved hastighed over den valgte fartgrænse</span></label></div><div class="dialog-actions"><button value="cancel">Annuller</button><button value="save" class="primary">Gem køretøjssag</button></div></form>`;
+    dialog.innerHTML = `<form method="dialog" id="case-editor"><div class="dialog-head"><div><small>KØRETØJSSAG</small><h2>${item ? `Rediger ${escapeHtml(item.plate)}` : "Nyt køretøj"}</h2></div><button value="cancel" class="icon-button"><ha-icon icon="mdi:close"></ha-icon></button></div><div class="editor-grid">${field("plate", "Nummerplade")}${field("name", "Navn / relation")}<label><span>Kategori</span><select name="category">${Object.entries(CATEGORY).map(([key, value]) => `<option value="${key}" ${values.category === key ? "selected" : ""}>${value.label}</option>`).join("")}</select></label>${field("make", "Mærke")}${field("model", "Model")}${field("variant", "Variant")}${field("model_type", "Modeltype")}${field("model_year", "Årgang", "number")}${field("color", "Farve")}${field("chassis_type", "Karrosseri")}${field("fuel_type", "Drivmiddel")}${field("vehicle_type", "Køretøjstype")}<label class="wide"><span>Bemærkning</span><textarea name="notes" rows="3">${escapeHtml(values.notes)}</textarea></label><label class="wide checkbox-field"><input name="ignored" type="checkbox" ${values.ignored ? "checked" : ""}><span>Ignorér i oversigter og trafikstatistik</span></label><label class="wide checkbox-field"><input name="notify_on_passage" type="checkbox" ${values.notify_on_passage ? "checked" : ""}><span>Notificér ved hver passage</span></label></div><div class="dialog-actions"><button value="cancel">Annuller</button><button value="save" class="primary">Gem køretøjssag</button></div></form>`;
     this.shadowRoot.append(dialog); dialog.showModal();
     dialog.addEventListener("close", async () => {
       if (dialog.returnValue === "save") {
         const data = Object.fromEntries(new FormData(dialog.querySelector("form")).entries());
         data.ignored = data.ignored === "on";
         data.notify_on_passage = data.notify_on_passage === "on";
-        data.notify_on_speed = data.notify_on_speed === "on";
         if (!data.plate.trim()) { dialog.remove(); this._message = "Nummerpladen skal udfyldes."; this._render(); return; }
         if (data.model_year) data.model_year = Number(data.model_year); else delete data.model_year;
         try { await this._hass.callService("frigate_lpr", "set_plate", data); this._selectedPlate = data.plate.toUpperCase().replace(/[^A-Z0-9]/g, ""); this._message = "Køretøjssagen er gemt."; }

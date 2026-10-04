@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import logging
 from pathlib import Path
@@ -17,6 +17,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from .const import MOTORAPI_URL, SIGNAL_NEW_PLATE, SIGNAL_UPDATE, SNAPSHOT_API_PATH
@@ -45,6 +46,7 @@ class LPRManager:
         speed_limit: float = 50,
         notify_services: tuple[str, ...] = (),
         notify_critical: bool = False,
+        notify_speeding: bool = False,
     ) -> None:
         self.hass = hass
         self.entry_id = entry_id
@@ -62,6 +64,7 @@ class LPRManager:
         self.speed_limit = speed_limit
         self.notify_services = tuple(dict.fromkeys(service for service in notify_services if service))
         self.notify_critical = notify_critical
+        self.notify_speeding = notify_speeding
         self._pending_speeds: dict[str, tuple[float, float | None]] = {}
         self._snapshot_generations: dict[str, int] = {}
         self._snapshot_lock = asyncio.Lock()
@@ -70,6 +73,7 @@ class LPRManager:
         self.registry = LPRRegistry(frequent_observations=frequent_observations, frequent_days=frequent_days)
         self.unsubscribe: Callable[[], None] | None = None
         self.events_unsubscribe: Callable[[], None] | None = None
+        self.measurement_unsubscribe: Callable[[], None] | None = None
 
     async def async_setup(self) -> None:
         stored = await self.store.async_load()
@@ -79,6 +83,10 @@ class LPRManager:
                 frequent_observations=self.frequent_observations,
                 frequent_days=self.frequent_days,
             )
+        self.registry.begin_measurement(dt_util.now())
+        self.measurement_unsubscribe = async_track_time_interval(
+            self.hass, self._measurement_heartbeat, timedelta(minutes=5)
+        )
         self.unsubscribe = await mqtt.async_subscribe(self.hass, self.topic, self._message_received, qos=0)
         if self.speed_enabled and self.events_topic:
             self.events_unsubscribe = await mqtt.async_subscribe(
@@ -90,7 +98,16 @@ class LPRManager:
             self.unsubscribe()
         if self.events_unsubscribe:
             self.events_unsubscribe()
+        if self.measurement_unsubscribe:
+            self.measurement_unsubscribe()
+        self.registry.end_measurement(dt_util.now())
         await self.store.async_save(self.registry.data)
+
+    @callback
+    def _measurement_heartbeat(self, now: datetime) -> None:
+        """Persist how long traffic measurement has actually been active."""
+        self.registry.heartbeat_measurement(dt_util.as_local(now))
+        self.store.async_delay_save(lambda: self.registry.data, 5)
 
     @callback
     def _message_received(self, message: mqtt.ReceiveMessage) -> None:
@@ -125,10 +142,10 @@ class LPRManager:
                 self.notify_services
                 and (
                     record.get("notify_on_passage")
-                    or (record.get("notify_on_speed") and speeding)
+                    or (self.notify_speeding and speeding)
                 )
             )
-            if speeding and record.get("notify_on_speed"):
+            if speeding and self.notify_speeding:
                 observation = next(
                     (
                         item
@@ -310,7 +327,11 @@ class LPRManager:
         self, event_id: str, speed: float, angle: float | None
     ) -> None:
         """Send a speed-only alert when speed arrived after the LPR message."""
-        if speed <= self.speed_limit or not self.notify_services:
+        if (
+            speed <= self.speed_limit
+            or not self.notify_services
+            or not self.notify_speeding
+        ):
             return
         for plate, record in self.registry.plates.items():
             observation = next(
@@ -321,7 +342,7 @@ class LPRManager:
                 continue
             if observation.get("speed_notification_sent"):
                 return
-            if not record.get("notify_on_speed") or record.get("notify_on_passage"):
+            if record.get("notify_on_passage"):
                 return
             observation["speed_notification_sent"] = True
             self.store.async_delay_save(lambda: self.registry.data, 5)
@@ -351,7 +372,6 @@ class LPRManager:
         vehicle: dict[str, Any] | None = None,
         ignored: bool | None = None,
         notify_on_passage: bool | None = None,
-        notify_on_speed: bool | None = None,
     ) -> None:
         is_new = normalize_plate(plate) not in self.registry.plates
         key = self.registry.set_metadata(
@@ -362,7 +382,6 @@ class LPRManager:
             vehicle=vehicle,
             ignored=ignored,
             notify_on_passage=notify_on_passage,
-            notify_on_speed=notify_on_speed,
         )
         await self.store.async_save(self.registry.data)
         if is_new:
@@ -416,7 +435,7 @@ class LPRManager:
         record = self.registry.plates.get(plate, {})
         if not manual and (
             record.get("name")
-            or record.get("category") in {"own", "known", "unwanted"}
+            or record.get("category") in {"own", "known", "taxi", "unwanted"}
         ):
             result = {
                 "status": "skipped_private",

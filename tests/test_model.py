@@ -164,7 +164,7 @@ class LPRRegistryTests(unittest.TestCase):
             registry.observe(plate, seen + timedelta(minutes=event), str(event), camera="road")
         traffic = registry.summary(seen.date().isoformat())["traffic_stats"]
 
-        self.assertEqual(traffic["categories"], {"known": 2, "unknown": 1, "unwanted": 1})
+        self.assertEqual(traffic["categories"], {"known": 2, "taxi": 0, "unknown": 1, "unwanted": 1})
         self.assertEqual(sum(traffic["hour_counts"]), 4)
 
     def test_roundtrip_persistence_and_daily_summary(self):
@@ -235,22 +235,37 @@ class LPRRegistryTests(unittest.TestCase):
             "Besøgende",
             "known",
             notify_on_passage=True,
-            notify_on_speed=True,
         )
         self.assertTrue(registry.plate_view("ALERT1")["notify_on_passage"])
-        self.assertTrue(registry.plate_view("ALERT1")["notify_on_speed"])
         restored = LPRRegistry(registry.data)
         self.assertTrue(restored.plate_view("ALERT1")["notify_on_passage"])
-        self.assertTrue(restored.plate_view("ALERT1")["notify_on_speed"])
         restored.set_metadata(
             "ALERT1",
             "Besøgende",
             "known",
             notify_on_passage=False,
-            notify_on_speed=False,
         )
         self.assertFalse(restored.plate_view("ALERT1")["notify_on_passage"])
-        self.assertFalse(restored.plate_view("ALERT1")["notify_on_speed"])
+
+    def test_taxi_plate_is_classified_automatically_but_explicit_category_wins(self):
+        registry = LPRRegistry()
+        registry.observe("AB98123", datetime.now(timezone.utc), "taxi", camera="road")
+        self.assertEqual(registry.plate_view("AB98123")["classification"], "Hyrevogn")
+        registry.set_metadata("AB98123", "Vores bil", "own")
+        self.assertEqual(registry.plate_view("AB98123")["classification"], "Egen")
+
+    def test_traffic_averages_use_actual_measurement_exposure(self):
+        registry = LPRRegistry()
+        start = datetime(2026, 9, 2, 16, 30, tzinfo=timezone.utc)
+        end = datetime(2026, 9, 4, 10, 30, tzinfo=timezone.utc)
+        registry.begin_measurement(start)
+        registry.end_measurement(end)
+        for index, stamp in enumerate((start, start + timedelta(days=1), end - timedelta(minutes=1))):
+            registry.observe("ROAD1", stamp, str(index), camera="road")
+        traffic = registry._traffic_stats({"ROAD1": registry.plates["ROAD1"]})
+        self.assertEqual(traffic["measurement_hours"], 42.0)
+        self.assertEqual(traffic["weekday_exposure"][3], 1.0)
+        self.assertEqual(traffic["weekday_average"][3], 1.0)
 
     def test_manual_edit_preserves_unexposed_api_fields(self):
         registry = LPRRegistry({}, frequent_observations=5, frequent_days=3)

@@ -116,8 +116,7 @@
           "fuel_type": "Fuel type",
           "vehicle_type": "Vehicle type",
           "ignored": "Ignore in overviews and traffic statistics",
-          "notify_on_passage": "Notify on every passage",
-          "notify_on_speed": "Notify when speed exceeds the limit"
+          "notify_on_passage": "Notify on every passage"
         }
       },
       "notifications": {
@@ -126,10 +125,12 @@
         "data": {
           "notify_service_1": "First device",
           "notify_service_2": "Second device",
-          "notify_critical": "Send as critical notification"
+          "notify_critical": "Send as critical notification",
+          "notify_speeding": "Notify for all passages above the speed limit"
         },
         "data_description": {
-          "notify_critical": "Plays the default sound at full volume on iPhone, including in mute/Focus, when Critical Alerts are allowed for the Home Assistant app."
+          "notify_critical": "Plays the default sound at full volume on iPhone, including in mute/Focus, when Critical Alerts are allowed for the Home Assistant app.",
+          "notify_speeding": "Applies globally to all vehicles. Configure the threshold under Frigate speed."
         }
       },
       "remove_plate": {

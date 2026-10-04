@@ -10,6 +10,7 @@ import re
 from typing import Any
 
 PLATE_RE = re.compile(r"[^A-Z0-9]")
+TAXI_PLATE_RE = re.compile(r"^[A-Z]{2}(?:98|99)\d{3}$")
 
 
 def normalize_plate(value: str) -> str:
@@ -30,6 +31,7 @@ class LPRRegistry:
         self.data = data or {"version": 1, "plates": {}, "recent": []}
         self.data.setdefault("plates", {})
         self.data.setdefault("recent", [])
+        self.data.setdefault("measurement_intervals", [])
         for record in self.data["plates"].values():
             record.setdefault("vehicle", None)
             record.setdefault("vehicle_lookup", None)
@@ -37,8 +39,8 @@ class LPRRegistry:
             record.setdefault("notes", "")
             record.setdefault("snapshot", None)
             record.setdefault("ignored", False)
+            record.setdefault("auto_ignored_reason", None)
             record.setdefault("notify_on_passage", False)
-            record.setdefault("notify_on_speed", False)
             for observation in record.get("observations", []):
                 observation.setdefault("speed_kmh", None)
                 observation.setdefault("velocity_angle", None)
@@ -60,7 +62,6 @@ class LPRRegistry:
         vehicle: dict[str, Any] | None = None,
         ignored: bool | None = None,
         notify_on_passage: bool | None = None,
-        notify_on_speed: bool | None = None,
     ) -> str:
         """Add or update user-controlled metadata."""
         key = normalize_plate(plate)
@@ -73,10 +74,10 @@ class LPRRegistry:
             record["notes"] = notes.strip()
         if ignored is not None:
             record["ignored"] = ignored
+            if not ignored:
+                record["auto_ignored_reason"] = None
         if notify_on_passage is not None:
             record["notify_on_passage"] = notify_on_passage
-        if notify_on_speed is not None:
-            record["notify_on_speed"] = notify_on_speed
         if vehicle is not None:
             merged_vehicle = dict(record.get("vehicle") or {})
             for field, value in vehicle.items():
@@ -261,8 +262,12 @@ class LPRRegistry:
             return "Uønsket"
         if record.get("category") == "unknown":
             return "Ukendt"
+        if record.get("category") == "taxi":
+            return "Hyrevogn"
         if record.get("name"):
             return "Kendt lokal"
+        if TAXI_PLATE_RE.fullmatch(record.get("plate", "")):
+            return "Hyrevogn"
         if (
             record["count"] >= self.frequent_observations
             and len(record["days"]) >= self.frequent_days
@@ -450,7 +455,7 @@ class LPRRegistry:
             return False
         return not (
             record.get("name")
-            or record.get("category") in {"own", "known", "unwanted"}
+            or record.get("category") in {"own", "known", "taxi", "unwanted"}
             or record.get("vehicle_lookup") is not None
         )
 
@@ -461,6 +466,19 @@ class LPRRegistry:
         if result.get("status") == "success":
             record["vehicle"] = result.get("vehicle")
             record["vehicle_source"] = "motorapi"
+        vehicle = result.get("vehicle") or {}
+        missing_identity = result.get("status") == "not_found" or (
+            result.get("status") == "success"
+            and not vehicle.get("make")
+            and not vehicle.get("model")
+        )
+        has_user_identity = bool(
+            record.get("name")
+            or record.get("category") in {"own", "known", "taxi", "unwanted"}
+        )
+        if missing_identity and not has_user_identity:
+            record["ignored"] = True
+            record["auto_ignored_reason"] = "motorapi_unknown_vehicle"
 
     def summary(self, today: str) -> dict[str, Any]:
         visible_plates = {
@@ -520,6 +538,7 @@ class LPRRegistry:
                 "Kendt lokal",
                 "Uønsket",
                 "Ukendt",
+                "Hyrevogn",
                 "Hyppig",
                 "Sjælden",
                 "Engangsbesøgende",
@@ -576,7 +595,7 @@ class LPRRegistry:
         ]
         hour_counts = [0] * 24
         weekday_counts = [0] * 7
-        categories = {"known": 0, "unknown": 0, "unwanted": 0}
+        categories = {"known": 0, "taxi": 0, "unknown": 0, "unwanted": 0}
         timestamps: list[datetime] = []
         measured_speeds: list[tuple[str, datetime, float]] = []
         for _plate, record, item in observations:
@@ -589,6 +608,8 @@ class LPRRegistry:
             classification = self.classification(record)
             if classification in {"Egen", "Kendt lokal"}:
                 categories["known"] += 1
+            elif classification == "Hyrevogn":
+                categories["taxi"] += 1
             elif classification == "Uønsket":
                 categories["unwanted"] += 1
             else:
@@ -598,8 +619,26 @@ class LPRRegistry:
         recent_30 = sum(stamp >= now - timedelta(days=30) for stamp in timestamps)
         today = sum(stamp.date() == now.date() for stamp in timestamps)
         total = len(observations)
-        busiest_hour = max(range(24), key=lambda hour: hour_counts[hour]) if total else None
-        busiest_weekday = max(range(7), key=lambda day: weekday_counts[day]) if total else None
+        intervals = self._measurement_ranges(timestamps, now)
+        hour_exposure = [0.0] * 24
+        weekday_exposure = [0.0] * 7
+        for start, end in intervals:
+            cursor = start
+            while cursor < end:
+                boundary = min(end, cursor.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1))
+                hours = (boundary - cursor).total_seconds() / 3600
+                hour_exposure[cursor.hour] += hours
+                weekday_exposure[cursor.weekday()] += hours / 24
+                cursor = boundary
+        hour_average = [round(count / exposure, 2) if exposure else 0 for count, exposure in zip(hour_counts, hour_exposure)]
+        weekday_average = [round(count / exposure, 2) if exposure else 0 for count, exposure in zip(weekday_counts, weekday_exposure)]
+        period_30_start = now - timedelta(days=30)
+        measured_days_30 = sum(
+            max(0, (end - max(start, period_30_start)).total_seconds())
+            for start, end in intervals if end > period_30_start
+        ) / 86400
+        busiest_hour = max(range(24), key=lambda hour: hour_average[hour]) if total else None
+        busiest_weekday = max(range(7), key=lambda day: weekday_average[day]) if total else None
         speed_values = [speed for _plate, _stamp, speed in measured_speeds]
         fastest = sorted(measured_speeds, key=lambda item: item[2], reverse=True)[:10]
         return {
@@ -608,9 +647,15 @@ class LPRRegistry:
             "today": today,
             "last_7_days": recent_7,
             "last_30_days": recent_30,
-            "daily_average_30": round(recent_30 / 30, 1),
+            "daily_average_30": round(recent_30 / measured_days_30, 1) if measured_days_30 else 0,
             "hour_counts": hour_counts,
             "weekday_counts": weekday_counts,
+            "hour_average": hour_average,
+            "weekday_average": weekday_average,
+            "hour_exposure": [round(value, 2) for value in hour_exposure],
+            "weekday_exposure": [round(value, 2) for value in weekday_exposure],
+            "measurement_start": intervals[0][0].isoformat() if intervals else None,
+            "measurement_hours": round(sum((end - start).total_seconds() for start, end in intervals) / 3600, 1),
             "categories": categories,
             "busiest_hour": busiest_hour,
             "busiest_weekday": busiest_weekday,
@@ -625,6 +670,60 @@ class LPRRegistry:
                 ],
             },
         }
+
+    def begin_measurement(self, timestamp: datetime) -> None:
+        """Start a persisted interval representing actual integration uptime."""
+        if not self.data["measurement_intervals"]:
+            legacy_stamps = [
+                datetime.fromisoformat(item["timestamp"])
+                for record in self.plates.values()
+                for item in record.get("observations", [])
+                if item.get("timestamp")
+            ]
+            if legacy_stamps:
+                self.data["measurement_intervals"].append(
+                    {
+                        "start": min(legacy_stamps).isoformat(),
+                        "end": timestamp.isoformat(),
+                        "active": True,
+                    }
+                )
+                return
+        for interval in self.data["measurement_intervals"]:
+            interval["active"] = False
+        iso = timestamp.isoformat()
+        self.data["measurement_intervals"].append({"start": iso, "end": iso, "active": True})
+
+    def heartbeat_measurement(self, timestamp: datetime) -> None:
+        """Extend the current uptime interval."""
+        intervals = self.data["measurement_intervals"]
+        if intervals and intervals[-1].get("active"):
+            intervals[-1]["end"] = timestamp.isoformat()
+
+    def end_measurement(self, timestamp: datetime) -> None:
+        """Close the current uptime interval."""
+        self.heartbeat_measurement(timestamp)
+        if self.data["measurement_intervals"]:
+            self.data["measurement_intervals"][-1]["active"] = False
+
+    def _measurement_ranges(
+        self, timestamps: list[datetime], now: datetime
+    ) -> list[tuple[datetime, datetime]]:
+        """Return valid uptime ranges, with a legacy fallback from first observation."""
+        ranges: list[tuple[datetime, datetime]] = []
+        for interval in self.data.get("measurement_intervals", []):
+            try:
+                start = datetime.fromisoformat(interval["start"])
+                end = now if interval.get("active") else datetime.fromisoformat(interval["end"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if end > start:
+                ranges.append((start, end))
+        if not ranges and timestamps:
+            start = min(timestamps)
+            if now > start:
+                ranges.append((start, now))
+        return sorted(ranges)
 
     @staticmethod
     def _empty_record(plate: str) -> dict[str, Any]:
@@ -646,6 +745,6 @@ class LPRRegistry:
             "notes": "",
             "snapshot": None,
             "ignored": False,
+            "auto_ignored_reason": None,
             "notify_on_passage": False,
-            "notify_on_speed": False,
         }

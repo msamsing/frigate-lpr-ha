@@ -36,6 +36,7 @@ from .const import (
     CONF_NOTIFY_SERVICE_1,
     CONF_NOTIFY_SERVICE_2,
     CONF_NOTIFY_CRITICAL,
+    CONF_NOTIFY_SPEEDING,
     CONF_TOPIC,
     DEFAULT_FREQUENT_DAYS,
     DEFAULT_FREQUENT_OBSERVATIONS,
@@ -46,6 +47,7 @@ from .const import (
     DEFAULT_SPEED_LIMIT,
     DEFAULT_SPEED_UNIT,
     DEFAULT_NOTIFY_CRITICAL,
+    DEFAULT_NOTIFY_SPEEDING,
     DOMAIN,
     PLATFORMS,
     SERVICE_REMOVE_PLATE_METADATA,
@@ -70,7 +72,7 @@ SET_PLATE_SCHEMA = vol.Schema(
     {
         vol.Required("plate"): cv.string,
         vol.Required(CONF_NAME): cv.string,
-        vol.Required("category"): vol.In(["own", "known", "unknown", "unwanted"]),
+        vol.Required("category"): vol.In(["own", "known", "taxi", "unknown", "unwanted"]),
         vol.Optional("notes"): cv.string,
         vol.Optional("make"): cv.string,
         vol.Optional("model"): cv.string,
@@ -83,7 +85,6 @@ SET_PLATE_SCHEMA = vol.Schema(
         vol.Optional("vehicle_type"): cv.string,
         vol.Optional("ignored"): cv.boolean,
         vol.Optional("notify_on_passage"): cv.boolean,
-        vol.Optional("notify_on_speed"): cv.boolean,
     }
 )
 REMOVE_SCHEMA = vol.Schema({vol.Required("plate"): cv.string})
@@ -129,6 +130,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -
             if service
         ),
         entry.options.get(CONF_NOTIFY_CRITICAL, DEFAULT_NOTIFY_CRITICAL),
+        entry.options.get(CONF_NOTIFY_SPEEDING, DEFAULT_NOTIFY_SPEEDING),
     )
     await manager.async_setup()
     entry.runtime_data = manager
@@ -162,7 +164,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: FrigateLPRConfigEntry) -
             vehicle=vehicle or None,
             ignored=call.data.get("ignored"),
             notify_on_passage=call.data.get("notify_on_passage"),
-            notify_on_speed=call.data.get("notify_on_speed"),
         )
 
     async def remove_metadata(call: ServiceCall) -> None:

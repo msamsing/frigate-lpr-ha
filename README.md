@@ -42,6 +42,7 @@ Klassifikationen gætter aldrig på ejerskab. Reglerne evalueres i denne rækkef
 |---|---|
 | Egen | Brugeren har sat kategori `own` |
 | Kendt lokal | Brugeren har sat kategori `known` eller har navngivet en plade uden en anden udtrykkelig kategori |
+| Hyrevogn | Nummerpladen har `98` eller `99` som de første to cifre efter bogstaverne, medmindre brugeren har valgt en anden kategori |
 | Ukendt | Brugeren har sat den neutrale kategori `unknown` |
 | Uønsket | Brugeren har udtrykkeligt sat kategori `unwanted` |
 | Hyppig | Mindst 10 observationer fordelt over mindst 4 forskellige dage |
@@ -87,6 +88,12 @@ Af hensyn til privatliv og API-forbrug gælder følgende:
   eksisterende historik sendes ikke bagudrettet.
 - Ethvert opslag markeres persistent som forsøgt, også hvis pladen ikke findes eller
   API'et svarer med en fejl. Senere observationer medfører derfor ikke nye API-kald.
+- Hvis MotorAPI definitivt svarer, at pladen ikke findes, eller returnerer et
+  succesfuldt svar uden mærke og model, betragtes aflæsningen som en sandsynlig
+  fejl. En ikke-navngivet og ikke-kategoriseret sag markeres da automatisk som
+  ignoreret. Historikken slettes ikke, og sagen kan findes under **Ignorerede sager**
+  og aktiveres manuelt igen. Midlertidige API-, login- og kvotefejl ignorerer aldrig
+  automatisk en sag.
 - Hele datasættet, som MotorAPIs køretøjs-endpoint returnerer, gemmes persistent lokalt
   i Home Assistant på sagen. Det kan derfor også indeholde VIN/stelnummer og andre
   oplysninger, som ikke vises direkte i kortets kompakte oversigt.
@@ -150,8 +157,9 @@ hastighed og bilsagens bemærkning. Hvis snapshot-funktionen er aktiveret og det
 aktuelle billede kan hentes, venter notifikationen på den lokale kopi og vedhæfter
 den. Dermed genbruges et ældre snapshot ikke som om det tilhørte den nye passage.
 
-På bilsagen kan **Notificér ved for høj hastighed** vælges uafhængigt. Den udløses,
-når Frigates estimerede passagehastighed overstiger den vejledende fartgrænse under
+Under **Passagenotifikationer** kan **Notificér ved alle passager over fartgrænsen**
+slås til globalt. Den gælder dermed alle køretøjer og udløses, når Frigates
+estimerede passagehastighed overstiger den vejledende fartgrænse under
 **Hastighed fra Frigate**, eksempelvis 40 eller 50 km/t. Hastighedsbeskeden virker
 også, når `frigate/events`-målingen ankommer efter LPR-beskeden. Hvis notifikation
 ved hver passage også er slået til, sendes der kun én besked for passagen.
@@ -162,6 +170,12 @@ men kun hvis brugeren også har tilladt **Critical Alerts** for Home Assistant i
 iOS-indstillingerne. Funktionen bør kun bruges til køretøjer, hvor hver passage
 reelt kræver øjeblikkelig opmærksomhed. Ændringer af modtagere og critical-status
 genindlæser integrationen fra UI'et og kræver ikke en fuld genstart af Home Assistant.
+
+Nummerplader, hvor de første to cifre efter bogstaverne er `98` eller `99`,
+klassificeres automatisk som **Hyrevogn**. En kategori, som brugeren selv vælger,
+har altid forrang. Trafikkens time- og ugedagsgennemsnit normaliseres efter den
+driftstid, integrationen faktisk har registreret, inklusive delvise opstarts- og
+slutperioder.
 
 ## Dashboard
 
@@ -227,7 +241,7 @@ data:
 ```
 
 Brug `category: own` kun for en plade, som brugeren selv har valgt at betegne som
-egen. De øvrige værdier er `known`, `unknown` og `unwanted`. Handlingen
+egen. De øvrige værdier er `known`, `taxi`, `unknown` og `unwanted`. Handlingen
 `frigate_lpr.remove_plate_metadata` fjerner navn og kategori, men bevarer observationerne.
 
 ## Automatisering

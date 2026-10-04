@@ -24,6 +24,8 @@ set_plate:
               value: own
             - label: Kendt lokal
               value: known
+            - label: Hyrevogn
+              value: taxi
             - label: Ukendt
               value: unknown
             - label: Uønsket
@@ -80,11 +82,6 @@ set_plate:
     notify_on_passage:
       name: Notificér ved passage
       description: Send en notifikation til integrationens valgte modtagere, hver gang køretøjet registreres.
-      selector:
-        boolean:
-    notify_on_speed:
-      name: Notificér ved for høj hastighed
-      description: Send en notifikation, når køretøjets målte hastighed overstiger integrationens valgte fartgrænse.
       selector:
         boolean:
 remove_plate_metadata:
